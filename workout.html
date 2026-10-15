@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Séance — HomeFit Coach</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<meta name="theme-color" content="#ff5a36" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="app-shell">
+
+  <div id="view-list">
+    <div class="topbar">
+      <h1 id="list-title">Aujourd'hui</h1>
+      <div class="topbar-actions">
+        <button class="icon-btn" data-theme-toggle title="Changer le thème">🌓</button>
+        <a href="coach.html" class="icon-btn" title="Coach">🧠</a>
+      </div>
+    </div>
+    <p id="list-subtitle" style="color:var(--text-muted); margin-top:-10px; font-size:14px;"></p>
+
+    <div class="card" id="resume-card" style="display:none; border:1.5px solid var(--primary);">
+      <strong>⏸️ Séance en pause</strong>
+      <p id="resume-text" style="font-size:13px; margin:6px 0 12px;"></p>
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-primary" id="resume-btn" style="padding:10px 14px; font-size:14px;">Reprendre</button>
+        <button class="btn btn-secondary" id="restart-btn" style="padding:10px 14px; font-size:14px;">Recommencer</button>
+      </div>
+    </div>
+
+    <div class="goal-select" id="session-picker"></div>
+
+    <div class="card" id="phase-banner" style="display:none;">
+      <p id="phase-banner-text" style="font-size:13px; margin:0; line-height:1.5;"></p>
+    </div>
+
+    <div class="card" id="coach-banner" style="display:none; background:var(--primary-light); border:1.5px solid var(--primary);">
+      <strong>🧠 Séance adaptée</strong>
+      <p id="coach-banner-text" style="font-size:13px; margin:6px 0 10px;"></p>
+      <button class="btn btn-outline" id="coach-banner-clear" style="width:auto; padding:8px 14px; font-size:13px;">Retirer l'adaptation</button>
+    </div>
+
+    <ul id="exercise-list"></ul>
+
+    <div class="card" style="margin-top:4px;">
+      <div class="settings-row" style="padding-top:0;">
+        <div>
+          <div class="row-label">Échauffement</div>
+          <div class="row-desc">4 mouvements · ~2 min</div>
+        </div>
+        <label class="switch"><input type="checkbox" id="opt-warmup" /><span class="slider"></span></label>
+      </div>
+      <div class="settings-row" style="padding-bottom:0;">
+        <div>
+          <div class="row-label">Étirements</div>
+          <div class="row-desc">5 étirements · ~2 min 30</div>
+        </div>
+        <label class="switch"><input type="checkbox" id="opt-cooldown" /><span class="slider"></span></label>
+      </div>
+      <p id="rest-note" style="font-size:12px; color:var(--text-muted); margin:12px 0 0;"></p>
+    </div>
+
+    <button class="btn btn-primary" id="start-btn" style="margin-top:8px;">Commencer l'entraînement</button>
+  </div>
+
+  <div id="view-rest" style="display:none;">
+    <div class="topbar">
+      <button class="icon-btn" id="rest-close">✕</button>
+      <h1>Repos</h1>
+      <span style="width:40px;"></span>
+    </div>
+    <div class="center-col">
+      <p style="color:var(--text-muted); margin-bottom:0;">Prochain :</p>
+      <p style="font-weight:700; font-size:18px; margin-top:2px;" id="rest-next-name"></p>
+      <div class="timer-circle" id="rest-timer">00:45</div>
+      <button class="btn btn-secondary" id="skip-rest-btn" style="max-width:220px;">Passer le repos</button>
+    </div>
+  </div>
+
+  <div id="view-work" style="display:none;">
+    <div class="topbar">
+      <button class="icon-btn" id="work-close" title="Mettre en pause">✕</button>
+      <h1>Séance en cours</h1>
+      <span style="width:40px;"></span>
+    </div>
+    <div class="session-header">
+      <div class="set-label" id="work-set-label">Série 1/4</div>
+      <div class="exercise-name" id="work-exercise-name">Squat</div>
+      <div class="target" id="work-target">15 répétitions</div>
+    </div>
+
+    <div class="center-col">
+      <div id="work-illustration"></div>
+      <div class="timer-circle" id="work-timer" style="display:none;">00:30</div>
+      <button class="btn btn-primary" id="work-done-btn" style="max-width:280px;">✔ Série terminée</button>
+      <div id="work-adjust" style="display:flex; gap:8px; margin-top:12px;">
+        <button class="btn btn-secondary" id="adjust-harder" style="padding:8px 14px; font-size:13px; width:auto;">😮‍💨 Trop dur</button>
+        <button class="btn btn-secondary" id="adjust-easier" style="padding:8px 14px; font-size:13px; width:auto;">😎 Trop facile</button>
+      </div>
+      <a href="#" id="work-detail-link" style="margin-top:14px; font-size:13px; color:var(--text-muted);">Voir la fiche de l'exercice</a>
+    </div>
+  </div>
+
+  <div id="view-summary" style="display:none;">
+    <div class="center-col" style="margin-top:20px;">
+      <div style="font-size:56px;">🔥</div>
+      <h1>Séance terminée !</h1>
+      <p id="summary-message" style="color:var(--text-muted);"></p>
+    </div>
+    <div class="stat-grid">
+      <div class="stat-tile">
+        <div class="value" id="summary-duration">0 min</div>
+        <div class="label">Durée</div>
+      </div>
+      <div class="stat-tile">
+        <div class="value" id="summary-calories">0</div>
+        <div class="label">Kcal estimées</div>
+      </div>
+      <div class="stat-tile">
+        <div class="value" id="summary-streak">🔥 0</div>
+        <div class="label">Semaines de suite</div>
+      </div>
+    </div>
+    <div class="card" id="feeling-card">
+      <h3>Comment c'était ?</h3>
+      <div style="display:flex; gap:8px;" id="feeling-buttons">
+        <button class="btn btn-secondary" data-feeling="dur" style="padding:10px 6px; font-size:14px;">😅 Dur</button>
+        <button class="btn btn-secondary" data-feeling="bien" style="padding:10px 6px; font-size:14px;">👍 Bien</button>
+        <button class="btn btn-secondary" data-feeling="facile" style="padding:10px 6px; font-size:14px;">😎 Facile</button>
+      </div>
+      <p id="feeling-result" style="font-size:13px; color:var(--text-muted); margin:10px 0 0; display:none;"></p>
+    </div>
+    <div class="card" id="summary-badges-card" style="display:none;">
+      <h3>🎉 Nouveau badge débloqué</h3>
+      <div class="badge-grid" id="summary-badges"></div>
+    </div>
+    <div class="card">
+      <h3>Exercices réalisés</h3>
+      <ul id="summary-list"></ul>
+    </div>
+    <a href="dashboard.html" class="btn btn-primary" id="summary-cta">Retour au tableau de bord</a>
+  </div>
+</div>
+
+<nav class="bottom-nav">
+  <div class="nav-inner">
+    <a href="dashboard.html" data-nav-link><span class="nav-icon">🏠</span>Accueil</a>
+    <a href="workout.html" data-nav-link><span class="nav-icon">🏋️</span>Séance</a>
+    <a href="nutrition.html" data-nav-link><span class="nav-icon">🥗</span>Nutrition</a>
+    <a href="kegel.html" data-nav-link><span class="nav-icon">🧘</span>Kegel</a>
+    <a href="progress.html" data-nav-link><span class="nav-icon">📈</span>Progrès</a>
+  </div>
+</nav>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/storage.js"></script>
+<script src="js/exercises.js"></script>
+<script src="js/illustrations.js"></script>
+<script src="js/workouts.js"></script>
+<script src="js/badges.js"></script>
+<script src="js/timer.js"></script>
+<script src="js/app.js"></script>
+<script>
+  const profile = getProfile();
+  const settings = getSettings();
+  const chosenTitle = new URLSearchParams(location.search).get('s');
+  const today = getTodayWorkout(profile, chosenTitle);
+
+  const adaptationRaw = sessionStorage.getItem('coachAdaptation');
+  const adaptation = adaptationRaw ? JSON.parse(adaptationRaw) : null;
+  let REST_SECONDS = settings.restSeconds;
+  const options = { warmup: settings.warmup, cooldown: settings.cooldown };
+
+  if (adaptation) {
+    if (adaptation.type === 'reduce-sets' || adaptation.type === 'light') {
+      today.exercises = today.exercises.map((ex) => ({ ...ex, sets: Math.max(1, ex.sets - 1) }));
+    }
+    if (adaptation.type === 'shorter-rest' || adaptation.type === 'light') {
+      REST_SECONDS = Math.min(REST_SECONDS, 30);
+    }
+    if (adaptation.type === 'swap-categories') {
+      today.exercises = today.exercises.map((ex) => {
+        const data = EXERCISES[ex.id];
+        if (adaptation.categories.includes(data.category) && data.alternatives && data.alternatives.length) {
+          return { ...ex, id: data.alternatives[0] };
+        }
+        return ex;
+      });
+    }
+  }
+
+  const views = {
+    list: document.getElementById('view-list'),
+    rest: document.getElementById('view-rest'),
+    work: document.getElementById('view-work'),
+    summary: document.getElementById('view-summary'),
+  };
+
+  function showView(name) {
+    Object.values(views).forEach((v) => (v.style.display = 'none'));
+    views[name].style.display = 'block';
+  }
+
+  function showToast(message) {
+    const el = document.getElementById('toast');
+    el.textContent = message;
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 1800);
+  }
+
+  initListView();
+
+  function initListView() {
+    document.getElementById('list-title').textContent = `Séance ${today.title}`;
+    document.getElementById('list-subtitle').textContent = today.subtitle;
+
+    document.getElementById('session-picker').innerHTML = SESSION_CYCLE.map(
+      (s) => `<button class="${s.title === today.title ? 'active' : ''}" onclick="location.href='workout.html?s=${encodeURIComponent(s.title)}'">${s.title}</button>`
+    ).join('');
+
+    const notes = [];
+    const todayPlan = getWeekPlan().days.find((d) => d.isToday);
+    if (todayPlan.rescue && !todayPlan.done) notes.push('🔁 <strong>Jour de rattrapage</strong> — cette séance garde ta série.');
+    else if (todayPlan.type === 'rest' && !todayPlan.done) notes.push("😌 Aujourd'hui est un jour de repos prévu : tu peux t'entraîner quand même, la séance comptera pour ta semaine.");
+    if (today.phase.label) notes.push(`<strong>Semaine ${today.week}/${TOTAL_WEEKS}</strong> — ${today.phase.label}`);
+    if (today.feeling === 'dur') notes.push('Tes dernières séances étaient dures : celle-ci est un peu allégée.');
+    if (today.feeling === 'facile') notes.push('Tes dernières séances étaient faciles : celle-ci est un peu plus intense.');
+    if (notes.length) {
+      document.getElementById('phase-banner').style.display = 'block';
+      document.getElementById('phase-banner-text').innerHTML = notes.join('<br>');
+    }
+
+    document.getElementById('rest-note').textContent = `Repos entre les séries : ${REST_SECONDS} s (modifiable dans les réglages ⚙️).`;
+
+    const warmupBox = document.getElementById('opt-warmup');
+    const cooldownBox = document.getElementById('opt-cooldown');
+    warmupBox.checked = options.warmup;
+    cooldownBox.checked = options.cooldown;
+    warmupBox.addEventListener('change', () => {
+      options.warmup = warmupBox.checked;
+      saveSettings({ ...getSettings(), warmup: options.warmup });
+    });
+    cooldownBox.addEventListener('change', () => {
+      options.cooldown = cooldownBox.checked;
+      saveSettings({ ...getSettings(), cooldown: options.cooldown });
+    });
+
+    if (adaptation) {
+      document.getElementById('coach-banner').style.display = 'block';
+      document.getElementById('coach-banner-text').textContent = `"${adaptation.label}" — la séance a été ajustée en conséquence.`;
+      document.getElementById('coach-banner-clear').addEventListener('click', () => {
+        sessionStorage.removeItem('coachAdaptation');
+        location.reload();
+      });
+    }
+
+    const saved = getInProgress();
+    if (saved && Date.now() - saved.savedAt < 12 * 3600 * 1000) {
+      document.getElementById('resume-card').style.display = 'block';
+      document.getElementById('resume-text').textContent = `${saved.title} — étape ${saved.queueIndex + 1}, démarrée le ${saved.date}.`;
+      document.getElementById('resume-btn').addEventListener('click', () => resumeSession(saved));
+      document.getElementById('restart-btn').addEventListener('click', () => {
+        clearInProgress();
+        document.getElementById('resume-card').style.display = 'none';
+      });
+    } else if (saved) {
+      clearInProgress();
+    }
+
+    renderExerciseList();
+    document.getElementById('start-btn').addEventListener('click', startSession);
+
+    document.getElementById('exercise-list').addEventListener('click', (e) => {
+      const swapBtn = e.target.closest('.swap-btn');
+      if (swapBtn) {
+        e.stopPropagation();
+        const panel = document.getElementById(`alt-panel-${swapBtn.dataset.idx}`);
+        panel.style.display = panel.style.display === 'flex' ? 'none' : 'flex';
+        return;
+      }
+      const altChip = e.target.closest('.alt-chip');
+      if (altChip) {
+        e.stopPropagation();
+        const idx = Number(altChip.dataset.idx);
+        today.exercises[idx] = { ...today.exercises[idx], id: altChip.dataset.altId };
+        renderExerciseList();
+        return;
+      }
+      const item = e.target.closest('.exercise-item');
+      if (item) {
+        location.href = `exercise.html?id=${today.exercises[Number(item.dataset.idx)].id}`;
+      }
+    });
+  }
+
+  function renderExerciseList() {
+    const list = document.getElementById('exercise-list');
+    list.innerHTML = today.exercises
+      .map((ex, idx) => {
+        const data = EXERCISES[ex.id];
+        const target = ex.reps
+          ? `${ex.sets} séries × ${ex.reps}${ex.perLeg ? '/jambe' : ''}`
+          : `${ex.sets} séries × ${ex.holdSeconds}s`;
+        const alts = (data.alternatives || [])
+          .map(
+            (altId) =>
+              `<button class="alt-item alt-chip" data-idx="${idx}" data-alt-id="${altId}">
+                <span>${EXERCISES[altId].icon} ${EXERCISES[altId].name}</span>
+                <span class="go">Utiliser →</span>
+              </button>`
+          )
+          .join('');
+        return `
+          <li class="exercise-item" data-idx="${idx}" style="flex-wrap:wrap;">
+            <div class="emoji">${data.icon}</div>
+            <div class="info">
+              <div class="name">${data.name}</div>
+              <div class="meta">${target}</div>
+            </div>
+            <button class="icon-btn swap-btn" data-idx="${idx}" style="width:32px;height:32px;font-size:14px;" title="Remplacer">🔄</button>
+            <div class="alt-list" id="alt-panel-${idx}" style="display:none; width:100%; margin-top:10px;">${alts}</div>
+          </li>
+        `;
+      })
+      .join('');
+  }
+
+  let queue = [];
+  let queueIndex = 0;
+  let sessionStart = null;
+  let activeTimer = null;
+  const exerciseTally = {};
+
+  function buildQueue() {
+    const steps = [];
+    if (options.warmup) {
+      WARMUP_ROUTINE.forEach((ex, i, arr) =>
+        steps.push({ exercise: ex, setIndex: 1, phase: 'warmup', phaseLabel: `Échauffement ${i + 1}/${arr.length}` })
+      );
+    }
+    today.exercises.forEach((ex, exIdx) => {
+      for (let s = 1; s <= ex.sets; s++) {
+        steps.push({ exercise: ex, setIndex: s });
+        const isLastSetOfLastExercise = exIdx === today.exercises.length - 1 && s === ex.sets;
+        if (!isLastSetOfLastExercise) {
+          steps.push({ rest: true, nextExercise: s === ex.sets ? today.exercises[exIdx + 1] : ex });
+        }
+      }
+    });
+    if (options.cooldown) {
+      COOLDOWN_ROUTINE.forEach((ex, i, arr) =>
+        steps.push({ exercise: ex, setIndex: 1, phase: 'cooldown', phaseLabel: `Étirements ${i + 1}/${arr.length}` })
+      );
+    }
+    return steps;
+  }
+
+  function startSession() {
+    sessionStart = Date.now();
+    queue = buildQueue();
+    queueIndex = 0;
+    today.exercises.forEach((ex) => (exerciseTally[ex.id] = 0));
+    acquireWakeLock();
+    runStep();
+  }
+
+  function resumeSession(saved) {
+    today.title = saved.title;
+    today.subtitle = saved.subtitle;
+    today.exercises = saved.exercises;
+    REST_SECONDS = saved.restSeconds;
+    Object.assign(options, saved.options);
+    queue = buildQueue();
+    queueIndex = Math.min(saved.queueIndex, queue.length - 1);
+    Object.assign(exerciseTally, saved.tally);
+    sessionStart = Date.now() - saved.elapsedMs;
+    acquireWakeLock();
+    runStep();
+  }
+
+  function persistProgress() {
+    saveInProgress({
+      date: todayISO(),
+      savedAt: Date.now(),
+      title: today.title,
+      subtitle: today.subtitle,
+      exercises: today.exercises,
+      restSeconds: REST_SECONDS,
+      options,
+      queueIndex,
+      tally: exerciseTally,
+      elapsedMs: Date.now() - sessionStart,
+    });
+  }
+
+  function runStep() {
+    if (queueIndex >= queue.length) {
+      finishSession();
+      return;
+    }
+    persistProgress();
+    const step = queue[queueIndex];
+    if (step.rest) {
+      showRest(step);
+    } else {
+      showWork(step);
+    }
+  }
+
+  function showRest(step) {
+    showView('rest');
+    const nextName = EXERCISES[step.nextExercise.id].name;
+    document.getElementById('rest-next-name').textContent = nextName;
+    speak(`Repos, ${REST_SECONDS} secondes. Prochain exercice : ${nextName}.`);
+    const el = document.getElementById('rest-timer');
+    if (activeTimer) activeTimer.cancel();
+    activeTimer = createCountdown(REST_SECONDS, {
+      onTick: (remaining) => {
+        el.textContent = formatTime(Math.max(0, remaining));
+        el.classList.toggle('urgent', remaining <= 3 && remaining > 0);
+      },
+      onComplete: () => {
+        queueIndex++;
+        runStep();
+      },
+    });
+    activeTimer.start();
+
+    document.getElementById('skip-rest-btn').onclick = () => {
+      activeTimer.cancel();
+      queueIndex++;
+      runStep();
+    };
+    document.getElementById('rest-close').onclick = pauseSession;
+  }
+
+  function showWork(step, silent = false) {
+    showView('work');
+    const header = document.querySelector('.session-header');
+    header.classList.remove('flash');
+    void header.offsetWidth;
+    header.classList.add('flash');
+    const data = EXERCISES[step.exercise.id];
+    const ex = step.exercise;
+    document.getElementById('work-set-label').textContent = step.phaseLabel || `Série ${step.setIndex}/${ex.sets}`;
+    document.getElementById('work-exercise-name').textContent = data.name;
+    document.getElementById('work-illustration').innerHTML = renderExerciseMedia(data);
+    document.getElementById('work-detail-link').href = `exercise.html?id=${ex.id}`;
+    document.getElementById('work-adjust').style.display = step.phase ? 'none' : 'flex';
+
+    const timerEl = document.getElementById('work-timer');
+    const doneBtn = document.getElementById('work-done-btn');
+    const targetEl = document.getElementById('work-target');
+
+    if (activeTimer) activeTimer.cancel();
+
+    if (ex.holdSeconds) {
+      targetEl.textContent = `Maintiens ${ex.holdSeconds} secondes`;
+      timerEl.style.display = 'flex';
+      doneBtn.style.display = 'none';
+      timerEl.textContent = formatTime(ex.holdSeconds);
+      if (!silent) speak(`${data.name}. ${ex.holdSeconds} secondes.`);
+      activeTimer = createCountdown(ex.holdSeconds, {
+        onTick: (remaining) => {
+          timerEl.textContent = formatTime(Math.max(0, remaining));
+          timerEl.classList.toggle('urgent', remaining <= 3 && remaining > 0);
+        },
+        onComplete: () => {
+          if (!step.phase) exerciseTally[ex.id] += ex.holdSeconds;
+          queueIndex++;
+          runStep();
+        },
+      });
+      activeTimer.start();
+    } else {
+      const reps = ex.perLeg ? `${ex.reps} répétitions / jambe` : `${ex.reps} répétitions`;
+      targetEl.textContent = reps;
+      timerEl.style.display = 'none';
+      doneBtn.style.display = 'flex';
+      if (!silent) speak(`${data.name}. Série ${step.setIndex} sur ${ex.sets}. ${reps}.`);
+      doneBtn.onclick = () => {
+        exerciseTally[ex.id] += ex.reps * (ex.perLeg ? 2 : 1);
+        queueIndex++;
+        runStep();
+      };
+    }
+
+    document.getElementById('adjust-harder').onclick = () => adjustCurrent(-1);
+    document.getElementById('adjust-easier').onclick = () => adjustCurrent(1);
+    document.getElementById('work-close').onclick = pauseSession;
+  }
+
+  // « Trop dur / trop facile » : modifie les séries restantes de cet exercice et s'en souvient pour les prochaines séances.
+  function adjustCurrent(direction) {
+    const step = queue[queueIndex];
+    const ex = step.exercise;
+    const isHold = !!ex.holdSeconds;
+    const key = isHold ? 'holdSeconds' : 'reps';
+    const before = ex[key];
+    ex[key] = Math.max(isHold ? 10 : 1, before + direction * (isHold ? 5 : 2));
+    const applied = ex[key] - before;
+    if (applied === 0) {
+      showToast('Déjà au minimum');
+      return;
+    }
+    changeAdjustment(ex.id, applied);
+    showToast(direction < 0 ? 'Allégé pour les séries suivantes' : 'Augmenté pour les séries suivantes');
+    persistProgress();
+    showWork(step, true);
+  }
+
+  function pauseSession() {
+    if (activeTimer) activeTimer.cancel();
+    if (confirm('Mettre la séance en pause ? Tu pourras la reprendre depuis la page Séance.')) {
+      releaseWakeLock();
+      location.href = 'dashboard.html';
+    } else {
+      runStep();
+    }
+  }
+
+  function finishSession() {
+    releaseWakeLock();
+    clearInProgress();
+    const durationMin = Math.max(1, Math.round((Date.now() - sessionStart) / 60000));
+    const calories = estimateSessionCalories(today.exercises);
+    const exercisesLog = today.exercises.map((ex) => ({
+      id: ex.id,
+      name: EXERCISES[ex.id].name,
+      totalReps: exerciseTally[ex.id] || 0,
+    }));
+
+    const badgesBefore = getBadgeStates().filter((b) => b.unlocked).map((b) => b.id);
+
+    addSessionLog({
+      date: todayISO(),
+      title: today.title,
+      duration: durationMin,
+      calories,
+      loggedAt: new Date().toISOString(),
+      exercises: exercisesLog,
+    });
+
+    if (adaptation) sessionStorage.removeItem('coachAdaptation');
+
+    const badgesAfter = getBadgeStates();
+    const newlyUnlocked = badgesAfter.filter((b) => b.unlocked && !badgesBefore.includes(b.id));
+
+    showView('summary');
+    speak('Séance terminée. Bravo !');
+    document.getElementById('summary-message').textContent = `Séance ${today.title} complétée. Bravo !`;
+    document.getElementById('summary-duration').textContent = `${durationMin} min`;
+    document.getElementById('summary-calories').textContent = calories;
+    document.getElementById('summary-streak').textContent = `🔥 ${getStreak()}`;
+
+    document.getElementById('feeling-buttons').addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-feeling]');
+      if (!btn) return;
+      setLastSessionFeeling(btn.dataset.feeling);
+      const trend = getFeelingTrend();
+      const result = document.getElementById('feeling-result');
+      result.style.display = 'block';
+      result.textContent =
+        trend === 'dur'
+          ? "C'est noté : je vais alléger un peu la prochaine séance."
+          : trend === 'facile'
+          ? "C'est noté : je vais monter un peu l'intensité de la prochaine séance."
+          : "Merci, c'est noté.";
+      document.querySelectorAll('#feeling-buttons button').forEach((b) => {
+        b.classList.add('btn-secondary');
+        b.classList.remove('btn-primary');
+      });
+      btn.classList.remove('btn-secondary');
+      btn.classList.add('btn-primary');
+    });
+
+    if (newlyUnlocked.length) {
+      document.getElementById('summary-badges-card').style.display = 'block';
+      document.getElementById('summary-badges').innerHTML = newlyUnlocked
+        .map(
+          (b) => `<div class="badge-tile unlocked"><div class="badge-icon">${b.icon}</div><div class="badge-label">${b.label}</div></div>`
+        )
+        .join('');
+    }
+
+    const list = document.getElementById('summary-list');
+    exercisesLog.forEach((ex) => {
+      const li = document.createElement('li');
+      li.className = 'history-item';
+      const unit = today.exercises.find((e) => e.id === ex.id).holdSeconds ? 's' : 'reps';
+      li.innerHTML = `<span>${ex.name}</span><span>${ex.totalReps} ${unit}</span>`;
+      list.appendChild(li);
+    });
+  }
+</script>
+</body>
+</html>

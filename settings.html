@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Réglages — HomeFit Coach</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<meta name="theme-color" content="#ff5a36" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="app-shell">
+  <a href="dashboard.html" class="back-link">← Retour</a>
+  <h1 style="margin-top:0;">⚙️ Réglages</h1>
+
+  <div class="card">
+    <h3>Profil</h3>
+    <p style="font-size:14px; margin:0 0 4px;" id="profile-name"></p>
+    <p style="font-size:13px; color:var(--text-muted); margin:0;" id="profile-meta"></p>
+  </div>
+
+  <div class="card">
+    <h3>Apparence</h3>
+    <div class="settings-row">
+      <div>
+        <div class="row-label">Thème sombre</div>
+        <div class="row-desc">Bascule entre thème clair et sombre</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="theme-switch" />
+        <span class="slider"></span>
+      </label>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Entraînement</h3>
+    <div style="padding:0 0 10px; border-bottom:1px solid var(--border);">
+      <div class="row-label">Mes jours d'entraînement</div>
+      <div class="row-desc">Coche les jours où tu t'entraînes, les autres sont tes jours de repos. Le nombre de jours coché devient ton objectif de la semaine.</div>
+      <div class="day-picker" id="day-picker"></div>
+      <p id="day-summary" style="font-size:13px; margin:6px 0 0; font-weight:600;"></p>
+      <p style="font-size:12px; color:var(--text-muted); margin:6px 0 10px;">🔁 Si tu rates un jour d'entraînement, le prochain jour de repos de la semaine devient un jour de rattrapage pour garder ta série.</p>
+    </div>
+    <div class="settings-row">
+      <div>
+        <div class="row-label">Repos entre les séries</div>
+        <div class="row-desc">Durée du minuteur de repos</div>
+      </div>
+      <select class="form-select" id="rest-seconds" style="width:90px;">
+        <option value="30">30 s</option><option value="45">45 s</option>
+        <option value="60">60 s</option><option value="90">90 s</option>
+      </select>
+    </div>
+    <div class="settings-row">
+      <div>
+        <div class="row-label">Coach vocal</div>
+        <div class="row-desc">Annonce les exercices et les repos à voix haute</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="voice-switch" />
+        <span class="slider"></span>
+      </label>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Rappel quotidien</h3>
+    <div class="settings-row">
+      <div>
+        <div class="row-label">Activer les rappels</div>
+        <div class="row-desc">Une notification si tu n'as pas encore fait ta séance</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="reminder-switch" />
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="settings-row" id="reminder-time-row" style="display:none;">
+      <div class="row-label">Heure du rappel</div>
+      <input type="time" class="form-input" id="reminder-time" style="width:120px;" />
+    </div>
+    <p style="font-size:12px; color:var(--text-muted); margin:8px 0 0;" id="reminder-note">Fonctionne uniquement lorsque l'application est ouverte dans le navigateur (pas de notifications en arrière-plan sans serveur).</p>
+  </div>
+
+  <div class="card">
+    <h3>Mes données</h3>
+    <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">Toutes tes données restent stockées localement dans ce navigateur. Exporte-les régulièrement pour ne rien perdre.</p>
+    <button class="btn btn-secondary" id="export-btn" style="margin-bottom:10px;">⬇️ Exporter mes données</button>
+    <label class="btn btn-outline" for="import-input" style="display:flex; cursor:pointer;">⬆️ Importer des données</label>
+    <input type="file" id="import-input" accept="application/json" style="display:none;" />
+    <p id="import-status" style="font-size:13px; margin:10px 0 0; display:none;"></p>
+  </div>
+</div>
+
+<nav class="bottom-nav">
+  <div class="nav-inner">
+    <a href="dashboard.html" data-nav-link><span class="nav-icon">🏠</span>Accueil</a>
+    <a href="workout.html" data-nav-link><span class="nav-icon">🏋️</span>Séance</a>
+    <a href="nutrition.html" data-nav-link><span class="nav-icon">🥗</span>Nutrition</a>
+    <a href="kegel.html" data-nav-link><span class="nav-icon">🧘</span>Kegel</a>
+    <a href="progress.html" data-nav-link><span class="nav-icon">📈</span>Progrès</a>
+  </div>
+</nav>
+
+<script src="js/storage.js"></script>
+<script src="js/timer.js"></script>
+<script src="js/app.js"></script>
+<script>
+  const profile = getProfile();
+  document.getElementById('profile-name').textContent = profile.name;
+  document.getElementById('profile-meta').textContent = `${goalLabel(profile.goal)} · Niveau ${levelLabel(profile.level).toLowerCase()}`;
+
+  const settings = getSettings();
+  const themeSwitch = document.getElementById('theme-switch');
+  const reminderSwitch = document.getElementById('reminder-switch');
+  const reminderTimeRow = document.getElementById('reminder-time-row');
+  const reminderTime = document.getElementById('reminder-time');
+
+  const restSeconds = document.getElementById('rest-seconds');
+  const voiceSwitch = document.getElementById('voice-switch');
+  restSeconds.value = String(settings.restSeconds);
+  voiceSwitch.checked = settings.voice;
+
+  const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
+  const DAY_LABELS = { 1: 'Lun', 2: 'Mar', 3: 'Mer', 4: 'Jeu', 5: 'Ven', 6: 'Sam', 0: 'Dim' };
+  const picker = document.getElementById('day-picker');
+
+  function renderDays() {
+    const selected = getTrainingDays();
+    picker.innerHTML = DAY_ORDER.map(
+      (d) => `<button type="button" data-day="${d}" class="${selected.includes(d) ? 'active' : ''}" aria-pressed="${selected.includes(d)}">${DAY_LABELS[d]}</button>`
+    ).join('');
+    const n = selected.length;
+    document.getElementById('day-summary').textContent = `${n} séance${n > 1 ? 's' : ''} par semaine · ${7 - n} jour${7 - n > 1 ? 's' : ''} de repos`;
+  }
+
+  picker.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-day]');
+    if (!btn) return;
+    const day = Number(btn.dataset.day);
+    let days = getTrainingDays().slice();
+    if (days.includes(day)) {
+      if (days.length === 1) return alert('Garde au moins 1 jour d’entraînement.');
+      days = days.filter((d) => d !== day);
+    } else {
+      if (days.length === 6) return alert('Garde au moins 1 jour de repos par semaine.');
+      days.push(day);
+    }
+    saveSettings({ ...getSettings(), trainingDays: days.sort((a, b) => a - b) });
+    renderDays();
+  });
+  renderDays();
+  restSeconds.addEventListener('change', () => saveSettings({ ...getSettings(), restSeconds: Number(restSeconds.value) }));
+  voiceSwitch.addEventListener('change', () => {
+    saveSettings({ ...getSettings(), voice: voiceSwitch.checked });
+    if (voiceSwitch.checked) speak('Coach vocal activé');
+  });
+
+  themeSwitch.checked = settings.theme === 'dark';
+  reminderSwitch.checked = settings.reminderEnabled;
+  reminderTime.value = settings.reminderTime;
+  reminderTimeRow.style.display = settings.reminderEnabled ? 'flex' : 'none';
+
+  themeSwitch.addEventListener('change', () => {
+    toggleTheme();
+  });
+
+  reminderSwitch.addEventListener('change', async () => {
+    const s = getSettings();
+    if (reminderSwitch.checked && 'Notification' in window) {
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        reminderSwitch.checked = false;
+        alert("Les notifications ont été refusées dans le navigateur. Active-les dans les réglages du navigateur pour utiliser les rappels.");
+        return;
+      }
+    }
+    s.reminderEnabled = reminderSwitch.checked;
+    saveSettings(s);
+    reminderTimeRow.style.display = s.reminderEnabled ? 'flex' : 'none';
+  });
+
+  reminderTime.addEventListener('change', () => {
+    const s = getSettings();
+    s.reminderTime = reminderTime.value;
+    saveSettings(s);
+  });
+
+  document.getElementById('export-btn').addEventListener('click', exportData);
+
+  document.getElementById('import-input').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        importData(reader.result);
+        const status = document.getElementById('import-status');
+        status.style.display = 'block';
+        status.style.color = 'var(--accent)';
+        status.textContent = '✔ Données importées avec succès. Recharge les autres pages pour voir les changements.';
+      } catch (err) {
+        const status = document.getElementById('import-status');
+        status.style.display = 'block';
+        status.style.color = 'var(--danger)';
+        status.textContent = '❌ Fichier invalide.';
+      }
+    };
+    reader.readAsText(file);
+  });
+</script>
+</body>
+</html>

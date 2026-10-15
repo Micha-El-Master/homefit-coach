@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Exercice — HomeFit Coach</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<meta name="theme-color" content="#ff5a36" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="app-shell">
+  <a href="javascript:history.back()" class="back-link">← Retour</a>
+
+  <div class="center-col" style="margin-bottom:10px;">
+    <div id="ex-illustration"></div>
+    <h1 id="ex-name" style="margin:6px 0 0;">Exercice</h1>
+  </div>
+
+  <div class="muscle-tags" id="ex-muscles"></div>
+
+  <div class="card">
+    <h3>Description</h3>
+    <p id="ex-description" style="font-size:14px; line-height:1.6; margin:0;"></p>
+  </div>
+
+  <div class="card">
+    <h3>Comment réaliser l'exercice</h3>
+    <ol class="list-numbered" id="ex-steps"></ol>
+  </div>
+
+  <div class="card">
+    <h3>Erreurs à éviter</h3>
+    <div id="ex-mistakes"></div>
+  </div>
+
+  <div class="card">
+    <h3>Résultats attendus</h3>
+    <p style="font-size:13px; color:var(--text-muted); margin-top:-6px;">Après plusieurs semaines :</p>
+    <div id="ex-results"></div>
+  </div>
+
+  <div class="card" id="ex-alternatives-card" style="display:none;">
+    <h3>🔄 Exercices alternatifs</h3>
+    <p style="font-size:13px; color:var(--text-muted); margin-top:-6px;">En cas de douleur ou de matériel manquant.</p>
+    <div class="alt-list" id="ex-alternatives"></div>
+  </div>
+</div>
+
+<nav class="bottom-nav">
+  <div class="nav-inner">
+    <a href="dashboard.html" data-nav-link><span class="nav-icon">🏠</span>Accueil</a>
+    <a href="workout.html" data-nav-link><span class="nav-icon">🏋️</span>Séance</a>
+    <a href="nutrition.html" data-nav-link><span class="nav-icon">🥗</span>Nutrition</a>
+    <a href="kegel.html" data-nav-link><span class="nav-icon">🧘</span>Kegel</a>
+    <a href="progress.html" data-nav-link><span class="nav-icon">📈</span>Progrès</a>
+  </div>
+</nav>
+
+<script src="js/storage.js"></script>
+<script src="js/exercises.js"></script>
+<script src="js/illustrations.js"></script>
+<script src="js/app.js"></script>
+<script>
+  const params = new URLSearchParams(location.search);
+  const ex = EXERCISES[params.get('id')];
+
+  if (!ex) {
+    document.querySelector('.app-shell').innerHTML = '<div class="empty-state"><div class="big-emoji">❓</div><h2>Exercice introuvable</h2><a href="dashboard.html" class="btn btn-primary" style="max-width:220px; margin:10px auto;">Retour</a></div>';
+  } else {
+    document.title = `${ex.name} — HomeFit Coach`;
+    document.getElementById('ex-illustration').innerHTML =
+      renderExerciseMedia(ex) +
+      (PHOTO_EXERCISES.has(ex.id) ? '<p class="media-credit">Images : free-exercise-db (domaine public)</p>' : '');
+    document.getElementById('ex-name').textContent = ex.name;
+    document.getElementById('ex-description').textContent = ex.description;
+
+    if (ex.alternatives && ex.alternatives.length) {
+      document.getElementById('ex-alternatives-card').style.display = 'block';
+      document.getElementById('ex-alternatives').innerHTML = ex.alternatives
+        .map((altId) => {
+          const alt = EXERCISES[altId];
+          return `<button class="alt-item" onclick="location.href='exercise.html?id=${altId}'"><span>${alt.icon} ${alt.name}</span><span class="go">Voir →</span></button>`;
+        })
+        .join('');
+    }
+
+    document.getElementById('ex-muscles').innerHTML = ex.muscles
+      .map((m) => `<span class="muscle-tag">${m.emoji} ${m.label}</span>`)
+      .join('');
+
+    document.getElementById('ex-steps').innerHTML = ex.steps.map((s) => `<li>${s}</li>`).join('');
+
+    document.getElementById('ex-mistakes').innerHTML = ex.mistakes
+      .map((m) => `<div class="mistake-item">❌ ${m}</div>`)
+      .join('');
+
+    document.getElementById('ex-results').innerHTML = ex.results
+      .map((r) => `<div class="result-item">✔ ${r}</div>`)
+      .join('');
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HomeFit Coach</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<meta name="theme-color" content="#ff5a36" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="app-shell">
+  <div class="center-col" style="margin-top:30px;">
+    <div style="font-size:56px;">🏋️</div>
+    <h1 style="margin:8px 0 2px;">HomeFit Coach</h1>
+    <p style="color:var(--text-muted); margin:0 0 24px; font-size:14px;">Ton coach à domicile, sans salle de sport.</p>
+  </div>
+
+  <form id="onboarding-form">
+    <div class="form-group">
+      <label for="name">Ton prénom</label>
+      <input class="form-input" type="text" id="name" placeholder="Jean" required />
+    </div>
+
+    <div class="form-group">
+      <label>Ton objectif</label>
+      <div class="option-grid" id="goal-options">
+        <div class="option-card" data-value="muscle">💪 Prendre du muscle</div>
+        <div class="option-card" data-value="perte">🔥 Perdre du poids</div>
+        <div class="option-card" data-value="forme">⚡ Améliorer ma forme</div>
+        <div class="option-card" data-value="discipline">🧠 Créer une habitude</div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Ton niveau</label>
+      <div class="option-grid" id="level-options">
+        <div class="option-card" data-value="debutant">🌱 Débutant</div>
+        <div class="option-card" data-value="intermediaire">🚀 Intermédiaire</div>
+        <div class="option-card" data-value="avance">🏆 Avancé</div>
+      </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Commencer mon programme</button>
+  </form>
+</div>
+
+<script src="js/storage.js"></script>
+<script src="js/workouts.js"></script>
+<script>
+  if (hasProfile()) {
+    location.href = 'dashboard.html';
+  }
+
+  let selectedGoal = null;
+  let selectedLevel = null;
+
+  function wireOptions(containerId, onSelect) {
+    const container = document.getElementById(containerId);
+    container.querySelectorAll('.option-card').forEach((el) => {
+      el.addEventListener('click', () => {
+        container.querySelectorAll('.option-card').forEach((c) => c.classList.remove('selected'));
+        el.classList.add('selected');
+        onSelect(el.dataset.value);
+      });
+    });
+  }
+
+  wireOptions('goal-options', (v) => (selectedGoal = v));
+  wireOptions('level-options', (v) => (selectedLevel = v));
+
+  document.getElementById('onboarding-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const name = document.getElementById('name').value.trim();
+    if (!name || !selectedGoal || !selectedLevel) {
+      alert('Merci de remplir ton prénom, ton objectif et ton niveau.');
+      return;
+    }
+    saveProfile({
+      name,
+      goal: selectedGoal,
+      level: selectedLevel,
+      startDate: todayISO(),
+    });
+    location.href = 'dashboard.html';
+  });
+</script>
+</body>
+</html>

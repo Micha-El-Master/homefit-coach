@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Progrès — HomeFit Coach</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<meta name="theme-color" content="#ff5a36" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="app-shell">
+  <div class="topbar">
+    <h1>📈 Progrès</h1>
+    <div class="topbar-actions">
+      <button class="icon-btn" data-theme-toggle title="Changer le thème">🌓</button>
+      <a href="settings.html" class="icon-btn" title="Réglages">⚙️</a>
+    </div>
+  </div>
+
+  <div class="hero-card">
+    <span class="badge" id="week-badge">Semaine 1/12</span>
+    <p class="greeting" id="program-percent" style="margin-bottom:10px;">0%</p>
+    <div class="progress-bar"><span id="hero-progress" style="width:0%"></span></div>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat-tile">
+      <div class="value" id="stat-sessions">0/48</div>
+      <div class="label">Séances terminées</div>
+    </div>
+    <div class="stat-tile">
+      <div class="value" id="stat-minutes">0</div>
+      <div class="label">Minutes totales</div>
+    </div>
+    <div class="stat-tile">
+      <div class="value" id="stat-calories">0</div>
+      <div class="label">Kcal totales</div>
+    </div>
+    <div class="stat-tile">
+      <div class="value" id="stat-week">0/4</div>
+      <div class="label">Séances cette semaine</div>
+    </div>
+    <div class="stat-tile">
+      <div class="value" id="stat-streak">🔥 0</div>
+      <div class="label">Semaines de suite</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Cette semaine</h3>
+    <div class="week-bars" id="week-bars"></div>
+  </div>
+
+  <div class="card">
+    <div class="calendar-header">
+      <button id="cal-prev">‹</button>
+      <span class="month-label" id="calendar-month-label"></span>
+      <button id="cal-next">›</button>
+    </div>
+    <div class="calendar-grid" style="margin-bottom:4px;">
+      <div class="calendar-dow">Lun</div>
+      <div class="calendar-dow">Mar</div>
+      <div class="calendar-dow">Mer</div>
+      <div class="calendar-dow">Jeu</div>
+      <div class="calendar-dow">Ven</div>
+      <div class="calendar-dow">Sam</div>
+      <div class="calendar-dow">Dim</div>
+    </div>
+    <div class="calendar-grid" id="calendar-grid-days"></div>
+  </div>
+
+  <div class="card">
+    <h3>🏅 Badges</h3>
+    <div class="badge-grid" id="badges-grid"></div>
+  </div>
+
+  <div class="card">
+    <h3>Historique des séances</h3>
+    <div id="session-history"></div>
+  </div>
+</div>
+
+<nav class="bottom-nav">
+  <div class="nav-inner">
+    <a href="dashboard.html" data-nav-link><span class="nav-icon">🏠</span>Accueil</a>
+    <a href="workout.html" data-nav-link><span class="nav-icon">🏋️</span>Séance</a>
+    <a href="nutrition.html" data-nav-link><span class="nav-icon">🥗</span>Nutrition</a>
+    <a href="kegel.html" data-nav-link><span class="nav-icon">🧘</span>Kegel</a>
+    <a href="progress.html" data-nav-link><span class="nav-icon">📈</span>Progrès</a>
+  </div>
+</nav>
+
+<script src="js/storage.js"></script>
+<script src="js/workouts.js"></script>
+<script src="js/badges.js"></script>
+<script src="js/app.js"></script>
+<script>
+  const progress = getProgramProgress();
+  const weekStats = getWeekStats();
+  const sessions = getSessionLog().slice().reverse();
+
+  document.getElementById('week-badge').textContent = `Semaine ${progress.week}/${progress.totalWeeks}`;
+  document.getElementById('program-percent').textContent = `${progress.percent}% du programme`;
+  document.getElementById('hero-progress').style.width = progress.percent + '%';
+  document.getElementById('stat-sessions').textContent = `${progress.sessionsCompleted}/${progress.totalProgramSessions}`;
+  document.getElementById('stat-minutes').textContent = progress.totalMinutes;
+  document.getElementById('stat-calories').textContent = progress.totalCalories;
+  document.getElementById('stat-week').textContent = `${weekStats.sessionsThisWeek}/${weekStats.targetSessionsPerWeek}`;
+  document.getElementById('stat-streak').textContent = `🔥 ${getStreak()}`;
+
+  document.getElementById('badges-grid').innerHTML = getBadgeStates()
+    .map(
+      (b) => `<div class="badge-tile${b.unlocked ? ' unlocked' : ''}" title="${b.description}">
+        <div class="badge-icon">${b.icon}</div>
+        <div class="badge-label">${b.label}</div>
+      </div>`
+    )
+    .join('');
+
+  let calendarDate = new Date();
+  calendarDate.setDate(1);
+
+  function renderCalendar() {
+    const year = calendarDate.getFullYear();
+    const month = calendarDate.getMonth();
+    document.getElementById('calendar-month-label').textContent = calendarDate
+      .toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
+      .replace(/^./, (c) => c.toUpperCase());
+
+    const firstDay = new Date(year, month, 1);
+    const startOffset = (firstDay.getDay() + 6) % 7;
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const todayIso = todayISO();
+    const sessionDates = new Set(getSessionLog().map((s) => s.date));
+    const kegelDates = new Set(getKegelLog().map((s) => s.date));
+
+    let cells = '';
+    for (let i = 0; i < startOffset; i++) cells += `<div class="calendar-cell other-month"></div>`;
+    for (let day = 1; day <= daysInMonth; day++) {
+      const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const classes = ['calendar-cell'];
+      if (iso === todayIso) classes.push('today');
+      if (sessionDates.has(iso)) classes.push('has-session');
+      if (kegelDates.has(iso)) classes.push('has-kegel');
+      cells += `<div class="${classes.join(' ')}">${day}</div>`;
+    }
+    document.getElementById('calendar-grid-days').innerHTML = cells;
+  }
+
+  document.getElementById('cal-prev').addEventListener('click', () => {
+    calendarDate.setMonth(calendarDate.getMonth() - 1);
+    renderCalendar();
+  });
+  document.getElementById('cal-next').addEventListener('click', () => {
+    calendarDate.setMonth(calendarDate.getMonth() + 1);
+    renderCalendar();
+  });
+  renderCalendar();
+
+  const dayLabels = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+  const now = new Date();
+  const startOfWeek = new Date(now);
+  const dow = (now.getDay() + 6) % 7;
+  startOfWeek.setDate(now.getDate() - dow);
+
+  const sessionsByDate = {};
+  getSessionLog().forEach((s) => {
+    sessionsByDate[s.date] = (sessionsByDate[s.date] || 0) + 1;
+  });
+
+  const barsEl = document.getElementById('week-bars');
+  dayLabels.forEach((label, i) => {
+    const d = new Date(startOfWeek);
+    d.setDate(startOfWeek.getDate() + i);
+    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const done = !!sessionsByDate[iso];
+    const col = document.createElement('div');
+    col.className = 'bar-col';
+    col.innerHTML = `<div class="bar${done ? ' done' : ''}" style="height:${done ? 60 : 6}px;"></div><div class="day-label">${label}</div>`;
+    barsEl.appendChild(col);
+  });
+
+  const historyEl = document.getElementById('session-history');
+  if (sessions.length === 0) {
+    historyEl.innerHTML = '<p style="font-size:13px; color:var(--text-muted); margin:0;">Aucune séance enregistrée pour l’instant.</p>';
+  } else {
+    historyEl.innerHTML = sessions
+      .slice(0, 20)
+      .map((s) => `<div class="history-item"><span>${s.date} — ${s.title}</span><span>${s.duration} min</span></div>`)
+      .join('');
+  }
+</script>
+</body>
+</html>

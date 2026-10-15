@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Tableau de bord — HomeFit Coach</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<meta name="theme-color" content="#ff5a36" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="app-shell">
+  <div class="topbar">
+    <h1>🏋️ HomeFit Coach</h1>
+    <div class="topbar-actions">
+      <button class="icon-btn" data-theme-toggle title="Changer le thème">🌓</button>
+      <a href="settings.html" class="icon-btn" title="Réglages">⚙️</a>
+    </div>
+  </div>
+
+  <div class="hero-card">
+    <span class="badge" id="week-badge">Semaine 1/12</span>
+    <span class="streak-pill" id="streak-pill" style="display:none;">🔥 0</span>
+    <p class="greeting" id="greeting">Bonjour 👋</p>
+    <p class="subtext" id="motivation-text"></p>
+    <div class="progress-bar"><span id="hero-progress" style="width:0%"></span></div>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat-tile">
+      <div class="value" id="stat-sessions">0/48</div>
+      <div class="label">Séances terminées</div>
+    </div>
+    <div class="stat-tile">
+      <div class="value" id="stat-calories">0</div>
+      <div class="label">Kcal estimées</div>
+    </div>
+  </div>
+
+  <div class="card" id="today-card">
+    <h2 id="today-title">Aujourd'hui</h2>
+    <p id="today-subtitle" style="color:var(--text-muted); font-size:14px; margin-top:-8px;"></p>
+    <p id="today-duration" style="font-size:14px;"></p>
+    <a id="today-cta" class="btn btn-primary" href="workout.html">Commencer l'entraînement</a>
+  </div>
+
+  <div class="card">
+    <h3>📅 Ma semaine</h3>
+    <div class="week-strip" id="week-strip"></div>
+    <p class="week-strip-legend">✅ fait · 🏋️ entraînement · 😌 repos · 🔁 rattrapage · ❌ manqué</p>
+    <p id="week-alert" style="display:none; font-size:13px; margin:10px 0 0; color:var(--primary-dark); font-weight:600;"></p>
+    <a href="settings.html" style="display:inline-block; margin-top:10px; font-size:13px; color:var(--text-muted); font-weight:600;">⚙️ Modifier mes jours</a>
+  </div>
+
+  <div class="card">
+    <h3>Accès rapide</h3>
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <a href="coach.html" class="btn btn-secondary" style="width:auto; flex:1 1 45%;">🧠 Coach</a>
+      <a href="nutrition.html" class="btn btn-secondary" style="width:auto; flex:1 1 45%;">🥗 Nutrition</a>
+      <a href="kegel.html" class="btn btn-secondary" style="width:auto; flex:1 1 45%;">🧘 Kegel</a>
+      <a href="progress.html" class="btn btn-secondary" style="width:auto; flex:1 1 45%;">📈 Progrès</a>
+    </div>
+  </div>
+</div>
+
+<nav class="bottom-nav">
+  <div class="nav-inner">
+    <a href="dashboard.html" data-nav-link><span class="nav-icon">🏠</span>Accueil</a>
+    <a href="workout.html" data-nav-link><span class="nav-icon">🏋️</span>Séance</a>
+    <a href="nutrition.html" data-nav-link><span class="nav-icon">🥗</span>Nutrition</a>
+    <a href="kegel.html" data-nav-link><span class="nav-icon">🧘</span>Kegel</a>
+    <a href="progress.html" data-nav-link><span class="nav-icon">📈</span>Progrès</a>
+  </div>
+</nav>
+
+<script src="js/storage.js"></script>
+<script src="js/exercises.js"></script>
+<script src="js/workouts.js"></script>
+<script src="js/timer.js"></script>
+<script src="js/app.js"></script>
+<script>
+  const profile = getProfile();
+  const progress = getProgramProgress();
+  const today = getTodayWorkout(profile);
+
+  document.getElementById('greeting').textContent = `Bonjour ${profile.name} 👋`;
+  document.getElementById('week-badge').textContent = `Semaine ${progress.week}/${progress.totalWeeks}`;
+  document.getElementById('motivation-text').textContent = getMotivationalMessage(progress.dayNumber);
+  document.getElementById('hero-progress').style.width = progress.percent + '%';
+  document.getElementById('stat-sessions').textContent = `${progress.sessionsCompleted}/${progress.totalProgramSessions}`;
+  document.getElementById('stat-calories').textContent = progress.totalCalories;
+
+  const streak = getStreak();
+  if (streak > 0) {
+    const pill = document.getElementById('streak-pill');
+    pill.style.display = 'inline-flex';
+    pill.textContent = `🔥 ${streak} sem.`;
+  }
+
+  const todayTitle = document.getElementById('today-title');
+  const todaySubtitle = document.getElementById('today-subtitle');
+  const todayDuration = document.getElementById('today-duration');
+  const todayCta = document.getElementById('today-cta');
+
+  const week = getWeekStats();
+  const plan = getWeekPlan();
+  const todayPlan = plan.days.find((d) => d.isToday);
+  const minutes = Math.round(today.exercises.length * 6);
+  const paused = getInProgress();
+  const isPaused = paused && Date.now() - paused.savedAt < 12 * 3600 * 1000;
+
+  todaySubtitle.textContent = today.subtitle + (today.phase.label ? ` · ${today.phase.label}` : '');
+  todayDuration.textContent = `⏱️ ${minutes} min · 📅 Cette semaine : ${week.sessionsThisWeek}/${getWeeklyTarget()}`;
+  todayCta.href = 'workout.html';
+
+  if (todayPlan.done) {
+    todayTitle.textContent = 'Séance du jour terminée ✅';
+    todaySubtitle.textContent = 'Bravo ! Tu peux enchaîner avec la prochaine séance si tu te sens en forme.';
+    todayCta.textContent = 'Faire une séance bonus';
+    todayCta.className = 'btn btn-secondary';
+  } else if (todayPlan.type === 'training') {
+    todayTitle.textContent = todayPlan.rescue ? '🔁 Rattrapage : ' + today.title : `Aujourd'hui : ${today.title}`;
+    if (todayPlan.rescue) todaySubtitle.textContent = 'Tu as raté une séance : celle-ci garde ta série. ' + todaySubtitle.textContent;
+    todayCta.textContent = isPaused ? '⏸️ Reprendre la séance en pause' : "Commencer l'entraînement";
+  } else {
+    todayTitle.textContent = 'Jour de repos 😌';
+    todaySubtitle.textContent = `Prochaine séance : ${today.title}. Profite-en pour récupérer et t'hydrater.`;
+    todayCta.textContent = isPaused ? '⏸️ Reprendre la séance en pause' : 'Faire une séance bonus quand même';
+    todayCta.className = 'btn btn-secondary';
+  }
+
+  const DAY_SHORT = { 1: 'Lun', 2: 'Mar', 3: 'Mer', 4: 'Jeu', 5: 'Ven', 6: 'Sam', 0: 'Dim' };
+  document.getElementById('week-strip').innerHTML = plan.days
+    .map((d) => {
+      const icon = d.done ? '✅' : d.missed ? '❌' : d.rescue ? '🔁' : d.type === 'training' ? '🏋️' : '😌';
+      const cls = ['wd', d.isToday ? 'today' : '', d.done ? 'done' : '', d.rescue && !d.done ? 'rescue' : ''].join(' ');
+      return `<div class="${cls}">${DAY_SHORT[d.weekday]}<span class="ico">${icon}</span></div>`;
+    })
+    .join('');
+
+  if (plan.shortfall > 0) {
+    const alert = document.getElementById('week-alert');
+    alert.style.display = 'block';
+    alert.textContent = `⚠️ Il te manque ${plan.shortfall} séance${plan.shortfall > 1 ? 's' : ''} pour valider ta semaine : fais une séance bonus dès que possible.`;
+  }
+</script>
+</body>
+</html>

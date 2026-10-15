@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Kegel — HomeFit Coach</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<meta name="theme-color" content="#ff5a36" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="app-shell">
+
+  <div id="view-intro">
+    <div class="topbar">
+      <h1>🧘 Kegel</h1>
+      <div class="topbar-actions">
+        <button class="icon-btn" data-theme-toggle title="Changer le thème">🌓</button>
+        <a href="settings.html" class="icon-btn" title="Réglages">⚙️</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Le plancher pelvien</h3>
+      <p style="font-size:14px; line-height:1.6; margin:0;">Le plancher pelvien est un ensemble de muscles qui soutiennent la vessie et les organes du bassin. Le renforcer améliore le contrôle musculaire, la posture et la performance physique globale.</p>
+    </div>
+
+    <div class="card">
+      <h3>Guide de respiration</h3>
+      <p style="font-size:14px; line-height:1.6; margin:0;">Respire calmement par le nez. Inspire avant chaque contraction, puis expire lentement en relâchant. Ne bloque jamais ta respiration.</p>
+    </div>
+
+    <div class="card">
+      <h3>Routine du matin</h3>
+      <ul style="padding-left:0; list-style:none; font-size:14px; margin:0 0 14px;">
+        <li style="margin-bottom:6px;">🐢 Contractions lentes : <strong>10 répétitions</strong></li>
+        <li style="margin-bottom:6px;">⚡ Contractions rapides : <strong>10 répétitions</strong></li>
+        <li>⏱️ Durée estimée : <strong id="kegel-duration">…</strong></li>
+      </ul>
+      <button class="btn btn-primary" id="start-kegel-btn">Commencer la routine</button>
+    </div>
+
+    <div class="card">
+      <h3>Historique</h3>
+      <div id="kegel-history"></div>
+    </div>
+  </div>
+
+  <div id="view-session" style="display:none;">
+    <div class="topbar">
+      <button class="icon-btn" id="kegel-close">✕</button>
+      <h1>Routine Kegel</h1>
+      <span style="width:40px;"></span>
+    </div>
+    <div class="center-col">
+      <p class="set-label" id="kegel-phase-label" style="color:var(--text-muted); font-weight:600;">Contractions lentes</p>
+      <p style="font-size:14px; color:var(--text-muted); margin:0 0 8px;" id="kegel-rep-label">Répétition 1/10</p>
+      <div class="timer-circle" id="kegel-timer">Contracte</div>
+      <p style="font-size:13px; color:var(--text-muted);">Suis le rythme affiché à l'écran</p>
+    </div>
+  </div>
+
+  <div id="view-kegel-summary" style="display:none;">
+    <div class="center-col" style="margin-top:30px;">
+      <div style="font-size:56px;">✅</div>
+      <h1>Routine terminée</h1>
+      <p style="color:var(--text-muted);">Bien joué, continue chaque matin pour de meilleurs résultats.</p>
+    </div>
+    <a href="dashboard.html" class="btn btn-primary">Retour au tableau de bord</a>
+  </div>
+</div>
+
+<nav class="bottom-nav">
+  <div class="nav-inner">
+    <a href="dashboard.html" data-nav-link><span class="nav-icon">🏠</span>Accueil</a>
+    <a href="workout.html" data-nav-link><span class="nav-icon">🏋️</span>Séance</a>
+    <a href="nutrition.html" data-nav-link><span class="nav-icon">🥗</span>Nutrition</a>
+    <a href="kegel.html" data-nav-link><span class="nav-icon">🧘</span>Kegel</a>
+    <a href="progress.html" data-nav-link><span class="nav-icon">📈</span>Progrès</a>
+  </div>
+</nav>
+
+<script src="js/storage.js"></script>
+<script src="js/timer.js"></script>
+<script src="js/app.js"></script>
+<script>
+  const views = {
+    intro: document.getElementById('view-intro'),
+    session: document.getElementById('view-session'),
+    summary: document.getElementById('view-kegel-summary'),
+  };
+
+  function showView(name) {
+    Object.values(views).forEach((v) => (v.style.display = 'none'));
+    views[name].style.display = 'block';
+  }
+
+  function renderHistory() {
+    const log = getKegelLog().slice().reverse();
+    const el = document.getElementById('kegel-history');
+    if (log.length === 0) {
+      el.innerHTML = '<p style="font-size:13px; color:var(--text-muted); margin:0;">Aucune séance enregistrée pour l’instant.</p>';
+      return;
+    }
+    el.innerHTML = log
+      .slice(0, 10)
+      .map((s) => `<div class="history-item"><span>${s.date}</span><span>${s.duration}s</span></div>`)
+      .join('');
+  }
+  renderHistory();
+
+  const PHASES = [
+    { label: 'Contractions lentes', reps: 10, contract: 5, relax: 5 },
+    { label: 'Contractions rapides', reps: 10, contract: 2, relax: 2 },
+  ];
+
+  const totalSeconds = PHASES.reduce((sum, p) => sum + p.reps * (p.contract + p.relax), 0);
+  document.getElementById('kegel-duration').textContent = `~${Math.floor(totalSeconds / 60)} min ${String(totalSeconds % 60).padStart(2, '0')} s`;
+
+  let sessionStart = null;
+  let activeTimer = null;
+  let phaseIdx = 0;
+  let repIdx = 0;
+
+  document.getElementById('start-kegel-btn').addEventListener('click', () => {
+    sessionStart = Date.now();
+    acquireWakeLock();
+    phaseIdx = 0;
+    repIdx = 0;
+    showView('session');
+    runRep();
+  });
+
+  document.getElementById('kegel-close').addEventListener('click', () => {
+    if (activeTimer) activeTimer.cancel();
+    if (confirm('Quitter la routine en cours ?')) {
+      releaseWakeLock();
+      location.href = 'kegel.html';
+    } else {
+      runRep();
+    }
+  });
+
+  function runRep() {
+    if (phaseIdx >= PHASES.length) {
+      finishKegel();
+      return;
+    }
+    const phase = PHASES[phaseIdx];
+    if (repIdx >= phase.reps) {
+      phaseIdx++;
+      repIdx = 0;
+      runRep();
+      return;
+    }
+    document.getElementById('kegel-phase-label').textContent = phase.label;
+    if (repIdx === 0) speak(phase.label);
+    document.getElementById('kegel-rep-label').textContent = `Répétition ${repIdx + 1}/${phase.reps}`;
+    runContract(phase);
+  }
+
+  function runContract(phase) {
+    const timerEl = document.getElementById('kegel-timer');
+    timerEl.textContent = 'Contracte 💪';
+    if (activeTimer) activeTimer.cancel();
+    activeTimer = createCountdown(phase.contract, {
+      onTick: () => {},
+      onComplete: () => runRelax(phase),
+    });
+    activeTimer.start();
+  }
+
+  function runRelax(phase) {
+    const timerEl = document.getElementById('kegel-timer');
+    timerEl.textContent = 'Relâche 😌';
+    activeTimer = createCountdown(phase.relax, {
+      onTick: () => {},
+      onComplete: () => {
+        repIdx++;
+        runRep();
+      },
+    });
+    activeTimer.start();
+  }
+
+  function finishKegel() {
+    releaseWakeLock();
+    const duration = Math.round((Date.now() - sessionStart) / 1000);
+    addKegelLog({ date: todayISO(), duration });
+    showView('summary');
+  }
+</script>
+</body>
+</html>

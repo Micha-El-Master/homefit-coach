@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Coach — HomeFit Coach</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<meta name="theme-color" content="#ff5a36" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="app-shell">
+  <a href="dashboard.html" class="back-link">← Retour</a>
+
+  <div class="center-col" style="margin-bottom:16px;">
+    <div style="font-size:48px;">🧠</div>
+    <h1 style="margin:6px 0 2px;">Ton coach</h1>
+    <p style="color:var(--text-muted); font-size:14px; margin:0; text-align:center;">Dis-moi comment tu te sens, j'adapte ta séance du jour.</p>
+  </div>
+
+  <div class="situation-grid" id="situation-list"></div>
+
+  <div class="coach-response" id="response-box" style="display:none;">
+    <p id="response-text" style="margin:0 0 12px;"></p>
+    <button class="btn btn-primary" id="apply-btn" style="display:none;">Appliquer à la séance du jour</button>
+    <a href="dashboard.html" class="btn btn-secondary" id="back-btn" style="margin-top:8px; display:none;">Retour au tableau de bord</a>
+  </div>
+</div>
+
+<nav class="bottom-nav">
+  <div class="nav-inner">
+    <a href="dashboard.html" data-nav-link><span class="nav-icon">🏠</span>Accueil</a>
+    <a href="workout.html" data-nav-link><span class="nav-icon">🏋️</span>Séance</a>
+    <a href="nutrition.html" data-nav-link><span class="nav-icon">🥗</span>Nutrition</a>
+    <a href="kegel.html" data-nav-link><span class="nav-icon">🧘</span>Kegel</a>
+    <a href="progress.html" data-nav-link><span class="nav-icon">📈</span>Progrès</a>
+  </div>
+</nav>
+
+<script src="js/storage.js"></script>
+<script src="js/app.js"></script>
+<script>
+  const SITUATIONS = [
+    {
+      id: 'genou',
+      emoji: '🦵',
+      label: "J'ai mal au genou",
+      desc: 'Douleur ou gêne articulaire',
+      response: "On adapte ta séance : les mouvements à fort impact pour les genoux (squats sautés, fentes, jumping jacks...) sont remplacés par des alternatives plus douces. Écoute ton corps et arrête si la douleur persiste.",
+      adaptation: { type: 'swap-categories', categories: ['Jambes', 'Cardio'] },
+    },
+    {
+      id: 'dos',
+      emoji: '🔙',
+      label: "J'ai mal au dos",
+      desc: 'Tension ou douleur lombaire',
+      response: "On retire une série sur chaque exercice et on privilégie une amplitude réduite et contrôlée. Si la douleur persiste au-delà de l'échauffement, mieux vaut te reposer aujourd'hui.",
+      adaptation: { type: 'reduce-sets' },
+    },
+    {
+      id: 'fatigue',
+      emoji: '😴',
+      label: 'Je suis fatigué(e)',
+      desc: "Peu d'énergie aujourd'hui",
+      response: "Séance allégée : une série en moins par exercice et des temps de repos raccourcis, pour rester actif sans t'épuiser.",
+      adaptation: { type: 'light' },
+    },
+    {
+      id: 'temps',
+      emoji: '⏰',
+      label: 'Je manque de temps',
+      desc: 'Séance express',
+      response: 'On réduit les temps de repos à 30 secondes pour une séance plus rapide, sans rien sacrifier de l’essentiel.',
+      adaptation: { type: 'shorter-rest' },
+    },
+    {
+      id: 'rate',
+      emoji: '📅',
+      label: "J'ai raté ma séance d'hier",
+      desc: 'Se remettre sur les rails',
+      response: "Pas grave du tout : une séance manquée n'efface pas ta progression. Si ton prochain jour était un jour de repos, il devient automatiquement un jour de rattrapage (🔁) pour garder ta série. Reprends simplement, sans culpabiliser.",
+      adaptation: null,
+    },
+  ];
+
+  const list = document.getElementById('situation-list');
+  list.innerHTML = SITUATIONS.map(
+    (s) => `<button class="situation-card" data-id="${s.id}">
+      <span class="emoji">${s.emoji}</span>
+      <span>
+        <div class="label">${s.label}</div>
+        <div class="desc">${s.desc}</div>
+      </span>
+    </button>`
+  ).join('');
+
+  const responseBox = document.getElementById('response-box');
+  const responseText = document.getElementById('response-text');
+  const applyBtn = document.getElementById('apply-btn');
+  const backBtn = document.getElementById('back-btn');
+
+  list.addEventListener('click', (e) => {
+    const card = e.target.closest('.situation-card');
+    if (!card) return;
+    document.querySelectorAll('.situation-card').forEach((c) => c.classList.remove('selected'));
+    card.classList.add('selected');
+
+    const situation = SITUATIONS.find((s) => s.id === card.dataset.id);
+    responseText.textContent = situation.response;
+    responseBox.style.display = 'block';
+
+    if (situation.adaptation) {
+      applyBtn.style.display = 'flex';
+      backBtn.style.display = 'none';
+      applyBtn.onclick = () => {
+        sessionStorage.setItem(
+          'coachAdaptation',
+          JSON.stringify({ ...situation.adaptation, label: situation.label })
+        );
+        location.href = 'workout.html';
+      };
+    } else {
+      applyBtn.style.display = 'none';
+      backBtn.style.display = 'flex';
+    }
+
+    responseBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
+</script>
+</body>
+</html>

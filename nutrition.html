@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Nutrition — HomeFit Coach</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<meta name="theme-color" content="#ff5a36" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="app-shell">
+  <div class="topbar">
+    <h1>🥗 Nutrition</h1>
+    <div class="topbar-actions">
+      <button class="icon-btn" data-theme-toggle title="Changer le thème">🌓</button>
+      <a href="settings.html" class="icon-btn" title="Réglages">⚙️</a>
+    </div>
+  </div>
+
+  <div class="goal-select" id="goal-select"></div>
+
+  <div class="card">
+    <h3>🎯 Objectif</h3>
+    <p id="goal-description" style="font-size:14px; margin:0;"></p>
+  </div>
+
+  <div class="card">
+    <h3>📊 Mes besoins quotidiens</h3>
+    <div id="needs-result"></div>
+    <details id="body-details" style="margin-top:12px;">
+      <summary style="cursor:pointer; font-weight:600; font-size:14px;">Renseigner mon profil physique</summary>
+      <form id="body-form" style="margin-top:12px;">
+        <div class="option-grid" style="margin-bottom:12px;">
+          <div class="form-group" style="margin:0;"><label for="b-weight">Poids (kg)</label><input class="form-input" type="number" id="b-weight" min="30" max="250" step="0.1" required /></div>
+          <div class="form-group" style="margin:0;"><label for="b-height">Taille (cm)</label><input class="form-input" type="number" id="b-height" min="120" max="230" required /></div>
+          <div class="form-group" style="margin:0;"><label for="b-age">Âge</label><input class="form-input" type="number" id="b-age" min="14" max="90" required /></div>
+          <div class="form-group" style="margin:0;"><label for="b-sex">Sexe</label>
+            <select class="form-select" id="b-sex"><option value="m">Homme</option><option value="f">Femme</option></select></div>
+        </div>
+        <div class="form-group">
+          <label for="b-activity">Activité hors séances</label>
+          <select class="form-select" id="b-activity">
+            <option value="1.4">Plutôt assis (bureau)</option>
+            <option value="1.55">Moyennement actif</option>
+            <option value="1.7">Très actif (debout, marche)</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" type="submit">Calculer</button>
+      </form>
+    </details>
+    <p style="font-size:11px; color:var(--text-muted); margin:12px 0 0;">Estimation indicative (formule de Mifflin-St Jeor), ce n'est pas un avis médical.</p>
+  </div>
+
+  <div class="card">
+    <h3>💧 Hydratation</h3>
+    <p style="font-size:14px; margin:0 0 8px;"><strong id="water-now">0</strong> / <span id="water-target">2000</span> ml</p>
+    <div class="progress-bar" style="margin-bottom:12px;"><span id="water-bar" style="width:0%"></span></div>
+    <div style="display:flex; gap:8px;">
+      <button class="btn btn-secondary" data-water="-250" style="padding:10px;">−250</button>
+      <button class="btn btn-secondary" data-water="250" style="padding:10px;">+250 ml</button>
+      <button class="btn btn-secondary" data-water="500" style="padding:10px;">+500 ml</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>🌅 Petit déjeuner</h3>
+    <div id="meal-breakfast"></div>
+  </div>
+
+  <div class="card">
+    <h3>☀️ Déjeuner</h3>
+    <div id="meal-lunch"></div>
+  </div>
+
+  <div class="card">
+    <h3>🌙 Dîner</h3>
+    <div id="meal-dinner"></div>
+  </div>
+
+  <div class="card">
+    <h3>🍎 Collation</h3>
+    <div id="meal-snack"></div>
+  </div>
+
+  <div class="card">
+    <h3>🛒 Liste de courses</h3>
+    <p style="font-size:13px; color:var(--text-muted); margin:-6px 0 10px;">Pour une journée type de ce plan.</p>
+    <div id="shopping-list"></div>
+    <button class="btn btn-secondary" id="shopping-reset" style="margin-top:8px; padding:10px; font-size:13px;">Tout décocher</button>
+  </div>
+</div>
+
+<nav class="bottom-nav">
+  <div class="nav-inner">
+    <a href="dashboard.html" data-nav-link><span class="nav-icon">🏠</span>Accueil</a>
+    <a href="workout.html" data-nav-link><span class="nav-icon">🏋️</span>Séance</a>
+    <a href="nutrition.html" data-nav-link><span class="nav-icon">🥗</span>Nutrition</a>
+    <a href="kegel.html" data-nav-link><span class="nav-icon">🧘</span>Kegel</a>
+    <a href="progress.html" data-nav-link><span class="nav-icon">📈</span>Progrès</a>
+  </div>
+</nav>
+
+<script src="js/storage.js"></script>
+<script src="js/app.js"></script>
+<script>
+  const NUTRITION_PLANS = {
+    muscle: {
+      label: '💪 Prise de muscle',
+      description: 'Un léger surplus calorique avec beaucoup de protéines pour soutenir la récupération et la croissance musculaire.',
+      kcalAdjust: 0.10,
+      proteinPerKg: 1.8,
+      breakfast: ['🥚 3 œufs', '🍌 Banane', '🥣 Avoine'],
+      lunch: ['🍚 Riz', '🍗 Poulet', '🥗 Légumes'],
+      dinner: ['🐟 Poisson', '🥔 Patate douce', '🥦 Brocolis'],
+      snack: ['🥜 Poignée d’amandes', '🥛 Yaourt grec'],
+    },
+    perte: {
+      label: '🔥 Perte de poids',
+      description: 'Un léger déficit calorique avec des protéines maigres et beaucoup de légumes pour rester rassasié.',
+      kcalAdjust: -0.15,
+      proteinPerKg: 1.8,
+      breakfast: ['🥚 2 œufs', '🍓 Fruits rouges', '🥣 Yaourt nature'],
+      lunch: ['🥗 Salade composée', '🍗 Poulet grillé', '🫒 Filet d’huile d’olive'],
+      dinner: ['🐟 Poisson blanc', '🥦 Légumes vapeur', '🍋 Citron'],
+      snack: ['🥕 Bâtonnets de légumes', '🍏 Pomme'],
+    },
+    forme: {
+      label: '⚡ Condition physique',
+      description: 'Une alimentation équilibrée qui couvre tes besoins énergétiques sans excès, pour progresser régulièrement.',
+      kcalAdjust: 0,
+      proteinPerKg: 1.4,
+      breakfast: ['🥣 Avoine', '🍌 Banane', '🥛 Lait'],
+      lunch: ['🍚 Riz complet', '🍗 Poulet', '🥗 Légumes de saison'],
+      dinner: ['🐟 Poisson', '🥔 Pomme de terre', '🥕 Carottes'],
+      snack: ['🍌 Banane', '🥜 Fruits secs'],
+    },
+    discipline: {
+      label: '🧠 Habitude durable',
+      description: 'Un plan simple et facile à tenir, pensé pour créer une routine alimentaire stable sur le long terme.',
+      kcalAdjust: 0,
+      proteinPerKg: 1.4,
+      breakfast: ['🍞 Pain complet', '🥑 Avocat', '🥚 Œuf'],
+      lunch: ['🍚 Riz', '🍗 Poulet ou légumineuses', '🥗 Légumes'],
+      dinner: ['🍝 Pâtes complètes', '🍅 Sauce tomate', '🧀 Un peu de fromage'],
+      snack: ['🍫 Carré de chocolat noir', '🍎 Fruit'],
+    },
+  };
+
+  const profile = getProfile();
+  let currentGoal = profile.goal;
+
+  function renderMeal(elId, items) {
+    document.getElementById(elId).innerHTML = items
+      .map((i) => `<div class="meal-card"><span>${i.split(' ')[0]}</span><span>${i.split(' ').slice(1).join(' ')}</span></div>`)
+      .join('');
+  }
+
+  // Mifflin-St Jeor : métabolisme de base, puis dépense totale selon l'activité, puis ajustement selon l'objectif.
+  function computeNeeds(body, plan) {
+    const bmr = 10 * body.weight + 6.25 * body.height - 5 * body.age + (body.sex === 'm' ? 5 : -161);
+    const maintenance = bmr * body.activity;
+    const kcal = Math.round((maintenance * (1 + plan.kcalAdjust)) / 10) * 10;
+    const protein = Math.round(body.weight * plan.proteinPerKg);
+    const fat = Math.round((kcal * 0.25) / 9);
+    const carbs = Math.max(0, Math.round((kcal - protein * 4 - fat * 9) / 4));
+    const waterMl = Math.round((body.weight * 35) / 50) * 50;
+    return { kcal, protein, fat, carbs, waterMl };
+  }
+
+  function renderNeeds() {
+    const plan = NUTRITION_PLANS[currentGoal] || NUTRITION_PLANS.forme;
+    const body = getProfile().body;
+    const box = document.getElementById('needs-result');
+    if (!body) {
+      box.innerHTML = '<p style="font-size:13px; color:var(--text-muted); margin:0;">Renseigne ton poids, ta taille et ton âge pour calculer tes besoins.</p>';
+      document.getElementById('body-details').open = true;
+      return { waterMl: 2000 };
+    }
+    const n = computeNeeds(body, plan);
+    box.innerHTML = `
+      <div class="stat-grid" style="margin-bottom:0;">
+        <div class="stat-tile"><div class="value">${n.kcal}</div><div class="label">kcal / jour</div></div>
+        <div class="stat-tile"><div class="value">${n.protein} g</div><div class="label">Protéines</div></div>
+        <div class="stat-tile"><div class="value">${n.carbs} g</div><div class="label">Glucides</div></div>
+        <div class="stat-tile"><div class="value">${n.fat} g</div><div class="label">Lipides</div></div>
+      </div>`;
+    return n;
+  }
+
+  function renderWater(targetMl) {
+    const now = getWaterToday();
+    document.getElementById('water-now').textContent = now;
+    document.getElementById('water-target').textContent = targetMl;
+    document.getElementById('water-bar').style.width = Math.min(100, Math.round((now / targetMl) * 100)) + '%';
+  }
+
+  function foodName(item) {
+    return item.split(' ').slice(1).join(' ');
+  }
+
+  function renderShopping(plan) {
+    const checked = new Set(readJSON(STORAGE_KEYS.SHOPPING, []));
+    const names = [...new Set([...plan.breakfast, ...plan.lunch, ...plan.dinner, ...plan.snack].map(foodName))];
+    document.getElementById('shopping-list').innerHTML = names
+      .map(
+        (n) => `<label class="meal-card" style="cursor:pointer; align-items:center;">
+          <input type="checkbox" data-item="${n.replace(/"/g, '&quot;')}" ${checked.has(n) ? 'checked' : ''} />
+          <span style="${checked.has(n) ? 'text-decoration:line-through; color:var(--text-muted);' : ''}">${n}</span>
+        </label>`
+      )
+      .join('');
+  }
+
+  let needs = { waterMl: 2000 };
+
+  function render() {
+    const plan = NUTRITION_PLANS[currentGoal] || NUTRITION_PLANS.forme;
+    document.getElementById('goal-description').textContent = plan.description;
+    renderMeal('meal-breakfast', plan.breakfast);
+    renderMeal('meal-lunch', plan.lunch);
+    renderMeal('meal-dinner', plan.dinner);
+    renderMeal('meal-snack', plan.snack);
+    needs = renderNeeds();
+    renderWater(needs.waterMl);
+    renderShopping(plan);
+
+    document.querySelectorAll('#goal-select button').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.goal === currentGoal);
+    });
+  }
+
+  const goalSelect = document.getElementById('goal-select');
+  Object.entries(NUTRITION_PLANS).forEach(([key, plan]) => {
+    const btn = document.createElement('button');
+    btn.textContent = plan.label;
+    btn.dataset.goal = key;
+    btn.addEventListener('click', () => {
+      currentGoal = key;
+      render();
+    });
+    goalSelect.appendChild(btn);
+  });
+
+  const body = profile.body;
+  if (body) {
+    document.getElementById('b-weight').value = body.weight;
+    document.getElementById('b-height').value = body.height;
+    document.getElementById('b-age').value = body.age;
+    document.getElementById('b-sex').value = body.sex;
+    document.getElementById('b-activity').value = String(body.activity);
+  }
+
+  document.getElementById('body-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const p = getProfile();
+    p.body = {
+      weight: Number(document.getElementById('b-weight').value),
+      height: Number(document.getElementById('b-height').value),
+      age: Number(document.getElementById('b-age').value),
+      sex: document.getElementById('b-sex').value,
+      activity: Number(document.getElementById('b-activity').value),
+    };
+    saveProfile(p);
+    document.getElementById('body-details').open = false;
+    render();
+  });
+
+  document.querySelectorAll('[data-water]').forEach((btn) =>
+    btn.addEventListener('click', () => {
+      addWater(Number(btn.dataset.water));
+      renderWater(needs.waterMl);
+    })
+  );
+
+  document.getElementById('shopping-list').addEventListener('change', (e) => {
+    const box = e.target.closest('input[data-item]');
+    if (!box) return;
+    const checked = new Set(readJSON(STORAGE_KEYS.SHOPPING, []));
+    if (box.checked) checked.add(box.dataset.item);
+    else checked.delete(box.dataset.item);
+    writeJSON(STORAGE_KEYS.SHOPPING, [...checked]);
+    box.nextElementSibling.style.cssText = box.checked ? 'text-decoration:line-through; color:var(--text-muted);' : '';
+  });
+
+  document.getElementById('shopping-reset').addEventListener('click', () => {
+    writeJSON(STORAGE_KEYS.SHOPPING, []);
+    render();
+  });
+
+  render();
+</script>
+</body>
+</html>
