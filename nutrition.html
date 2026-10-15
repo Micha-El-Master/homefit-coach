@@ -22,12 +22,12 @@
   <div class="goal-select" id="goal-select"></div>
 
   <div class="card">
-    <h3>🎯 Objectif</h3>
+    <h2>🎯 Objectif</h2>
     <p id="goal-description" style="font-size:14px; margin:0;"></p>
   </div>
 
   <div class="card">
-    <h3>📊 Mes besoins quotidiens</h3>
+    <h2>📊 Mes besoins quotidiens</h2>
     <div id="needs-result"></div>
     <details id="body-details" style="margin-top:12px;">
       <summary style="cursor:pointer; font-weight:600; font-size:14px;">Renseigner mon profil physique</summary>
@@ -54,7 +54,7 @@
   </div>
 
   <div class="card">
-    <h3>💧 Hydratation</h3>
+    <h2>💧 Hydratation</h2>
     <p style="font-size:14px; margin:0 0 8px;"><strong id="water-now">0</strong> / <span id="water-target">2000</span> ml</p>
     <div class="progress-bar" style="margin-bottom:12px;"><span id="water-bar" style="width:0%"></span></div>
     <div style="display:flex; gap:8px;">
@@ -65,28 +65,23 @@
   </div>
 
   <div class="card">
-    <h3>🌅 Petit déjeuner</h3>
-    <div id="meal-breakfast"></div>
+    <h2>🍽️ Menu de la semaine</h2>
+    <div class="settings-row" style="padding-top:0;">
+      <div>
+        <label class="row-label" for="diet-select">Régime</label>
+        <div class="row-desc">Menus indicatifs : vérifie les ingrédients en cas d'allergie.</div>
+      </div>
+      <select class="form-select" id="diet-select" style="width:140px;"></select>
+    </div>
+    <div class="day-picker" id="menu-days" role="group" aria-label="Jour du menu" style="margin-top:12px;"></div>
+    <p id="portion-note" style="font-size:13px; margin:8px 0 0; font-weight:600;"></p>
   </div>
 
-  <div class="card">
-    <h3>☀️ Déjeuner</h3>
-    <div id="meal-lunch"></div>
-  </div>
+  <div class="card" id="menu-card"></div>
 
   <div class="card">
-    <h3>🌙 Dîner</h3>
-    <div id="meal-dinner"></div>
-  </div>
-
-  <div class="card">
-    <h3>🍎 Collation</h3>
-    <div id="meal-snack"></div>
-  </div>
-
-  <div class="card">
-    <h3>🛒 Liste de courses</h3>
-    <p style="font-size:13px; color:var(--text-muted); margin:-6px 0 10px;">Pour une journée type de ce plan.</p>
+    <h2>🛒 Liste de courses</h2>
+    <p style="font-size:13px; color:var(--text-muted); margin:-6px 0 10px;">Pour les 7 jours du menu.</p>
     <div id="shopping-list"></div>
     <button class="btn btn-secondary" id="shopping-reset" style="margin-top:8px; padding:10px; font-size:13px;">Tout décocher</button>
   </div>
@@ -95,6 +90,7 @@
 <nav class="bottom-nav" id="bottom-nav" aria-label="Navigation principale"></nav>
 
 <script src="js/storage.js"></script>
+<script src="js/meals.js"></script>
 <script src="js/app.js"></script>
 <script>
   const NUTRITION_PLANS = {
@@ -103,51 +99,29 @@
       description: 'Un léger surplus calorique avec beaucoup de protéines pour soutenir la récupération et la croissance musculaire.',
       kcalAdjust: 0.10,
       proteinPerKg: 1.8,
-      breakfast: ['🥚 3 œufs', '🍌 Banane', '🥣 Avoine'],
-      lunch: ['🍚 Riz', '🍗 Poulet', '🥗 Légumes'],
-      dinner: ['🐟 Poisson', '🥔 Patate douce', '🥦 Brocolis'],
-      snack: ['🥜 Poignée d’amandes', '🥛 Yaourt grec'],
     },
     perte: {
       label: '🔥 Perte de poids',
       description: 'Un léger déficit calorique avec des protéines maigres et beaucoup de légumes pour rester rassasié.',
       kcalAdjust: -0.15,
       proteinPerKg: 1.8,
-      breakfast: ['🥚 2 œufs', '🍓 Fruits rouges', '🥣 Yaourt nature'],
-      lunch: ['🥗 Salade composée', '🍗 Poulet grillé', '🫒 Filet d’huile d’olive'],
-      dinner: ['🐟 Poisson blanc', '🥦 Légumes vapeur', '🍋 Citron'],
-      snack: ['🥕 Bâtonnets de légumes', '🍏 Pomme'],
     },
     forme: {
       label: '⚡ Condition physique',
       description: 'Une alimentation équilibrée qui couvre tes besoins énergétiques sans excès, pour progresser régulièrement.',
       kcalAdjust: 0,
       proteinPerKg: 1.4,
-      breakfast: ['🥣 Avoine', '🍌 Banane', '🥛 Lait'],
-      lunch: ['🍚 Riz complet', '🍗 Poulet', '🥗 Légumes de saison'],
-      dinner: ['🐟 Poisson', '🥔 Pomme de terre', '🥕 Carottes'],
-      snack: ['🍌 Banane', '🥜 Fruits secs'],
     },
     discipline: {
       label: '🧠 Habitude durable',
       description: 'Un plan simple et facile à tenir, pensé pour créer une routine alimentaire stable sur le long terme.',
       kcalAdjust: 0,
       proteinPerKg: 1.4,
-      breakfast: ['🍞 Pain complet', '🥑 Avocat', '🥚 Œuf'],
-      lunch: ['🍚 Riz', '🍗 Poulet ou légumineuses', '🥗 Légumes'],
-      dinner: ['🍝 Pâtes complètes', '🍅 Sauce tomate', '🧀 Un peu de fromage'],
-      snack: ['🍫 Carré de chocolat noir', '🍎 Fruit'],
     },
   };
 
   const profile = getProfile();
   let currentGoal = profile.goal;
-
-  function renderMeal(elId, items) {
-    document.getElementById(elId).innerHTML = items
-      .map((i) => `<div class="meal-card"><span>${i.split(' ')[0]}</span><span>${i.split(' ').slice(1).join(' ')}</span></div>`)
-      .join('');
-  }
 
   // Mifflin-St Jeor : métabolisme de base, puis dépense totale selon l'activité, puis ajustement selon l'objectif.
   function computeNeeds(body, plan) {
@@ -188,14 +162,26 @@
     document.getElementById('water-bar').style.width = Math.min(100, Math.round((now / targetMl) * 100)) + '%';
   }
 
-  function foodName(item) {
-    return item.split(' ').slice(1).join(' ');
+  let diet = getSettings().diet || 'omnivore';
+  let menuDay = mealDayIndex();
+  const DAY_NAMES = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+
+  function renderMenu() {
+    const menu = getDayMenu(diet, menuDay);
+    document.getElementById('menu-card').innerHTML = Object.keys(MEAL_LABELS)
+      .map(
+        (k) => `<h2 style="margin-bottom:8px;">${MEAL_LABELS[k]}</h2>` +
+          menu[k].map((i) => `<div class="meal-card"><span aria-hidden="true">${i.split(' ')[0]}</span><span>${foodName(i)}</span></div>`).join('')
+      )
+      .join('<div style="height:10px;"></div>');
+    document.getElementById('menu-days').innerHTML = DAY_NAMES.map(
+      (d, i) => `<button type="button" data-d="${i}" class="${i === menuDay ? 'active' : ''}" aria-pressed="${i === menuDay}">${d}</button>`
+    ).join('');
   }
 
-  function renderShopping(plan) {
+  function renderShopping() {
     const checked = new Set(readJSON(STORAGE_KEYS.SHOPPING, []));
-    const names = [...new Set([...plan.breakfast, ...plan.lunch, ...plan.dinner, ...plan.snack].map(foodName))];
-    document.getElementById('shopping-list').innerHTML = names
+    document.getElementById('shopping-list').innerHTML = getWeekShoppingList(diet)
       .map(
         (n) => `<label class="meal-card" style="cursor:pointer; align-items:center;">
           <input type="checkbox" data-item="${n.replace(/"/g, '&quot;')}" ${checked.has(n) ? 'checked' : ''} />
@@ -210,13 +196,11 @@
   function render() {
     const plan = NUTRITION_PLANS[currentGoal] || NUTRITION_PLANS.forme;
     document.getElementById('goal-description').textContent = plan.description;
-    renderMeal('meal-breakfast', plan.breakfast);
-    renderMeal('meal-lunch', plan.lunch);
-    renderMeal('meal-dinner', plan.dinner);
-    renderMeal('meal-snack', plan.snack);
+    document.getElementById('portion-note').textContent = '🎯 ' + PORTION_NOTES[currentGoal];
+    renderMenu();
     needs = renderNeeds();
     renderWater(needs.waterMl);
-    renderShopping(plan);
+    renderShopping();
 
     document.querySelectorAll('#goal-select button').forEach((btn) => {
       btn.classList.toggle('active', btn.dataset.goal === currentGoal);
@@ -233,6 +217,22 @@
       render();
     });
     goalSelect.appendChild(btn);
+  });
+
+  const dietSelect = document.getElementById('diet-select');
+  dietSelect.innerHTML = Object.entries(DIETS).map(([k, label]) => `<option value="${k}">${label}</option>`).join('');
+  dietSelect.value = diet;
+  dietSelect.addEventListener('change', () => {
+    diet = dietSelect.value;
+    saveSettings({ ...getSettings(), diet });
+    renderMenu();
+    renderShopping();
+  });
+  document.getElementById('menu-days').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-d]');
+    if (!btn) return;
+    menuDay = Number(btn.dataset.d);
+    renderMenu();
   });
 
   const body = profile.body;

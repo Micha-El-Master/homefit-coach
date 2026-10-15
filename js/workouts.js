@@ -79,6 +79,20 @@ const COOLDOWN_ROUTINE = [
   { id: 'posture-enfant', sets: 1, holdSeconds: 30 },
 ];
 
+// Séance de récupération (jours de repos) : hors du cycle de séances, ne compte pas dans la série.
+const RECOVERY_TITLE = 'Récupération';
+const RECOVERY_ROUTINE = [
+  { id: 'respiration-profonde', sets: 1, holdSeconds: 60 },
+  { id: 'chat-vache', sets: 1, holdSeconds: 40 },
+  { id: 'rotations-hanches', sets: 1, holdSeconds: 40 },
+  { id: 'rotations-bras', sets: 1, holdSeconds: 40 },
+  { id: 'etirement-quadriceps', sets: 1, holdSeconds: 40 },
+  { id: 'etirement-ischios', sets: 1, holdSeconds: 40 },
+  { id: 'etirement-pectoraux', sets: 1, holdSeconds: 40 },
+  { id: 'etirement-epaules', sets: 1, holdSeconds: 40 },
+  { id: 'posture-enfant', sets: 1, holdSeconds: 60 },
+];
+
 const SESSION_CYCLE = WEEK_PROGRAM.filter((d) => d.type === 'training');
 
 function getNextSessionTitle() {
@@ -92,7 +106,8 @@ const DELOAD_WEEKS = [4, 8];
 const PROGRESS_PER_WEEK = 0.03;
 const FEELING_FACTOR = { dur: 0.9, facile: 1.1 };
 
-function getWeekPhase(week) {
+function getWeekPhase(week, mode = 'standard') {
+  if (mode === 'maintenance') return { deload: false, label: 'Mode entretien : on garde le niveau, sans progression.' };
   if (DELOAD_WEEKS.includes(week)) {
     return { deload: true, label: 'Semaine allégée : on récupère pour mieux progresser 🌿' };
   }
@@ -108,11 +123,13 @@ function getProgressionFactor(week) {
   return 1 + PROGRESS_PER_WEEK * (week - 1);
 }
 
-function scaleExercise(exercise, level, week = 1, feeling = null) {
-  const factor = (LEVEL_FACTOR[level] || 1) * getProgressionFactor(week) * (FEELING_FACTOR[feeling] || 1);
+// mode : 'standard', 'phase2' (+20 % sur tout le cycle) ou 'maintenance' (niveau constant, sans semaines allégées).
+function scaleExercise(exercise, level, week = 1, feeling = null, mode = 'standard') {
+  const progression = mode === 'maintenance' ? 1 : getProgressionFactor(week);
+  const factor = (LEVEL_FACTOR[level] || 1) * progression * (mode === 'phase2' ? 1.2 : 1) * (FEELING_FACTOR[feeling] || 1);
   const delta = getAdjustments()[exercise.id] || 0;
-  const phase = getWeekPhase(week);
-  const extraSet = week >= 9 && !phase.deload && exercise.sets === 3 ? 1 : 0;
+  const phase = getWeekPhase(week, mode);
+  const extraSet = mode !== 'maintenance' && week >= 9 && !phase.deload && exercise.sets === 3 ? 1 : 0;
   const scaled = { ...exercise, sets: exercise.sets + extraSet };
   if (exercise.reps) {
     scaled.reps = Math.max(1, Math.round(exercise.reps * factor) + delta);
@@ -193,12 +210,30 @@ function applyEquipment(exercises, equipment) {
   return { exercises: out, replaced, dropped };
 }
 
+function getRecoveryWorkout() {
+  return {
+    type: 'training',
+    recovery: true,
+    title: RECOVERY_TITLE,
+    subtitle: 'Mobilité et étirements doux',
+    week: 1,
+    mode: 'standard',
+    phase: { deload: false, label: null },
+    feeling: null,
+    goalNote: null,
+    equipmentNote: null,
+    exercises: RECOVERY_ROUTINE.map((ex) => ({ ...ex })),
+  };
+}
+
 function getTodayWorkout(profile, title) {
+  if (title === RECOVERY_TITLE) return getRecoveryWorkout();
   const day = SESSION_CYCLE.find((s) => s.title === (title || getNextSessionTitle())) || SESSION_CYCLE[0];
   const level = profile ? profile.level : 'intermediaire';
   const goal = profile ? profile.goal : 'forme';
   const progress = getProgramProgress();
   const week = progress ? progress.week : 1;
+  const mode = progress ? progress.mode : 'standard';
   const feeling = getFeelingTrend();
   const equipped = applyEquipment(applyGoalVariant(day, goal), getSettings().equipment);
 
@@ -213,11 +248,12 @@ function getTodayWorkout(profile, title) {
   return {
     ...day,
     week,
-    phase: getWeekPhase(week),
+    mode,
+    phase: getWeekPhase(week, mode),
     feeling,
     goalNote: GOAL_NOTES[goal] || null,
     equipmentNote,
-    exercises: equipped.exercises.map((ex) => scaleExercise(ex, level, week, feeling)),
+    exercises: equipped.exercises.map((ex) => scaleExercise(ex, level, week, feeling, mode)),
   };
 }
 

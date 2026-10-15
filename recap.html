@@ -38,17 +38,17 @@
   </div>
 
   <div class="card">
-    <h3>Ressenti</h3>
+    <h2>Ressenti</h2>
     <p id="r-feelings" style="font-size:14px; margin:0;"></p>
   </div>
 
   <div class="card" id="top-card">
-    <h3>Tes exercices les plus travaillés</h3>
+    <h2>Tes exercices les plus travaillés</h2>
     <div id="r-top"></div>
   </div>
 
   <div class="card" style="background:var(--primary-light);">
-    <h3>💡 Conseil pour la suite</h3>
+    <h2>💡 Conseil pour la suite</h2>
     <p id="r-tip" style="font-size:14px; line-height:1.6; margin:0;"></p>
   </div>
 </div>
@@ -62,7 +62,7 @@
 <script>
   const currentMonday = mondayOf(new Date());
   const profile = getProfile();
-  const firstMonday = mondayOf(new Date(profile.startDate + 'T00:00:00'));
+  const firstMonday = mondayOf(new Date((profile.streakStart || profile.startDate) + 'T00:00:00'));
   let monday = new Date(currentMonday);
 
   const fmt = (d) => d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
@@ -79,7 +79,10 @@
     document.getElementById('recap-sessions').textContent = `${recap.count}/${recap.target} séances`;
     document.getElementById('recap-status').textContent =
       recap.count >= recap.target ? '✅ Objectif atteint' : isCurrent ? '⏳ En cours' : '❌ Objectif manqué';
-    document.getElementById('recap-sub').textContent = recap.holdSeconds ? `+ ${recap.holdSeconds} s de gainage` : '';
+    document.getElementById('recap-sub').textContent = [
+      recap.holdSeconds ? `+ ${recap.holdSeconds} s de gainage` : '',
+      recap.recoveries ? `🧘 ${recap.recoveries} séance${recap.recoveries > 1 ? 's' : ''} de récupération` : '',
+    ].filter(Boolean).join(' · ');
 
     document.getElementById('r-minutes').textContent = recap.minutes;
     document.getElementById('r-calories').textContent = recap.calories;

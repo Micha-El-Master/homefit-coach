@@ -95,6 +95,38 @@ function checkDailyReminder() {
   saveSettings(settings);
 }
 
+const APP_VERSION = '2.0';
+
+function isStandalone() {
+  return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+}
+
+// Demande au navigateur de ne pas effacer les données de l'appli en cas de manque de place ou d'inactivité.
+async function ensurePersistentStorage() {
+  try {
+    if (!navigator.storage || !navigator.storage.persist) return false;
+    return (await navigator.storage.persisted()) || (await navigator.storage.persist());
+  } catch (e) {
+    return false;
+  }
+}
+
+// Invite d'installation (Chrome/Android) : on la garde pour la proposer au bon moment.
+let installPromptEvent = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  installPromptEvent = e;
+  document.dispatchEvent(new Event('install-available'));
+});
+
+async function promptInstall() {
+  if (!installPromptEvent) return false;
+  installPromptEvent.prompt();
+  const { outcome } = await installPromptEvent.userChoice;
+  installPromptEvent = null;
+  return outcome === 'accepted';
+}
+
 function registerServiceWorker() {
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
@@ -123,4 +155,5 @@ document.addEventListener('DOMContentLoaded', () => {
   initThemeToggle();
   registerServiceWorker();
   checkDailyReminder();
+  if (hasProfile()) ensurePersistentStorage();
 });

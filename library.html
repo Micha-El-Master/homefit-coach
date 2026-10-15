@@ -41,7 +41,7 @@
   function thumb(ex) {
     if (!PHOTO_EXERCISES.has(ex.id)) return `<div class="emoji">${ex.icon}</div>`;
     const photo = PHOTO_ALIAS[ex.id] || ex.id;
-    return `<img class="lib-thumb" src="images/exercises/${photo}-0.jpg" alt="" loading="lazy" />`;
+    return `<img class="lib-thumb" src="images/thumbs/${photo}.jpg" alt="" loading="lazy" width="64" height="48" />`;
   }
 
   function render() {

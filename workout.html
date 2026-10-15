@@ -45,20 +45,20 @@
 
     <ul id="exercise-list"></ul>
 
-    <div class="card" style="margin-top:4px;">
+    <div class="card hide-on-recovery" style="margin-top:4px;">
       <div class="settings-row" style="padding-top:0;">
         <div>
-          <div class="row-label">Échauffement</div>
+          <div class="row-label" id="opt-warmup-label">Échauffement</div>
           <div class="row-desc">4 mouvements · ~2 min</div>
         </div>
-        <label class="switch"><input type="checkbox" id="opt-warmup" /><span class="slider"></span></label>
+        <label class="switch"><input type="checkbox" id="opt-warmup" aria-labelledby="opt-warmup-label" /><span class="slider"></span></label>
       </div>
       <div class="settings-row" style="padding-bottom:0;">
         <div>
-          <div class="row-label">Étirements</div>
+          <div class="row-label" id="opt-cooldown-label">Étirements</div>
           <div class="row-desc">5 étirements · ~2 min 30</div>
         </div>
-        <label class="switch"><input type="checkbox" id="opt-cooldown" /><span class="slider"></span></label>
+        <label class="switch"><input type="checkbox" id="opt-cooldown" aria-labelledby="opt-cooldown-label" /><span class="slider"></span></label>
       </div>
       <p id="rest-note" style="font-size:12px; color:var(--text-muted); margin:12px 0 0;"></p>
     </div>
@@ -123,17 +123,17 @@
         <div class="value" id="summary-duration">0 min</div>
         <div class="label">Durée</div>
       </div>
-      <div class="stat-tile">
+      <div class="stat-tile hide-on-recovery">
         <div class="value" id="summary-calories">0</div>
         <div class="label">Kcal estimées</div>
       </div>
-      <div class="stat-tile">
+      <div class="stat-tile hide-on-recovery">
         <div class="value" id="summary-streak">🔥 0</div>
         <div class="label">Semaines de suite</div>
       </div>
     </div>
-    <div class="card" id="feeling-card">
-      <h3>Comment c'était ?</h3>
+    <div class="card hide-on-recovery" id="feeling-card">
+      <h2>Comment c'était ?</h2>
       <div style="display:flex; gap:8px;" id="feeling-buttons">
         <button class="btn btn-secondary" data-feeling="dur" style="padding:10px 6px; font-size:14px;">😅 Dur</button>
         <button class="btn btn-secondary" data-feeling="bien" style="padding:10px 6px; font-size:14px;">👍 Bien</button>
@@ -142,11 +142,11 @@
       <p id="feeling-result" style="font-size:13px; color:var(--text-muted); margin:10px 0 0; display:none;"></p>
     </div>
     <div class="card" id="summary-badges-card" style="display:none;">
-      <h3>🎉 Nouveau badge débloqué</h3>
+      <h2>🎉 Nouveau badge débloqué</h2>
       <div class="badge-grid" id="summary-badges"></div>
     </div>
-    <div class="card">
-      <h3>Exercices réalisés</h3>
+    <div class="card hide-on-recovery">
+      <h2>Exercices réalisés</h2>
       <ul id="summary-list"></ul>
     </div>
     <a href="dashboard.html" class="btn btn-primary" id="summary-cta">Retour au tableau de bord</a>
@@ -172,15 +172,29 @@
 
   const adaptationRaw = sessionStorage.getItem('coachAdaptation');
   const adaptation = adaptationRaw ? JSON.parse(adaptationRaw) : null;
-  let REST_SECONDS = settings.restSeconds;
-  const options = { warmup: settings.warmup, cooldown: settings.cooldown };
+  let REST_SECONDS = today.recovery ? 10 : settings.restSeconds;
+  const options = today.recovery ? { warmup: false, cooldown: false } : { warmup: settings.warmup, cooldown: settings.cooldown };
 
-  if (adaptation) {
+  if (adaptation && !today.recovery) {
     if (adaptation.type === 'reduce-sets' || adaptation.type === 'light') {
       today.exercises = today.exercises.map((ex) => ({ ...ex, sets: Math.max(1, ex.sets - 1) }));
     }
     if (adaptation.type === 'shorter-rest' || adaptation.type === 'light') {
       REST_SECONDS = Math.min(REST_SECONDS, 30);
+    }
+    if (adaptation.type === 'no-equipment') {
+      today.exercises = applyEquipment(today.exercises, []).exercises;
+    }
+    if (adaptation.type === 'mini') {
+      today.exercises = today.exercises.slice(0, 3).map((ex) => ({ ...ex, sets: Math.min(2, ex.sets) }));
+    }
+    if (adaptation.type === 'comeback') {
+      today.exercises = today.exercises.map((ex) => ({
+        ...ex,
+        sets: Math.max(1, ex.sets - 1),
+        ...(ex.reps ? { reps: Math.max(1, Math.round(ex.reps * 0.8)) } : {}),
+        ...(ex.holdSeconds ? { holdSeconds: Math.max(10, Math.round(ex.holdSeconds * 0.8)) } : {}),
+      }));
     }
     if (adaptation.type === 'swap-categories') {
       today.exercises = today.exercises.map((ex) => {
@@ -217,14 +231,18 @@
   function initListView() {
     document.getElementById('list-title').textContent = `Séance ${today.title}`;
     document.getElementById('list-subtitle').textContent = today.subtitle;
+    if (today.recovery) document.body.classList.add('is-recovery');
 
     document.getElementById('session-picker').innerHTML = SESSION_CYCLE.map(
       (s) => `<button class="${s.title === today.title ? 'active' : ''}" onclick="location.href='workout.html?s=${encodeURIComponent(s.title)}'">${s.title}</button>`
     ).join('');
 
     const notes = [];
+    if (today.recovery) notes.push('🧘 <strong>Séance de récupération</strong> — mouvements doux, sans effort. Elle ne compte pas dans ta série et ne remplace pas une séance.');
     const todayPlan = getWeekPlan().days.find((d) => d.isToday);
-    if (todayPlan.rescue && !todayPlan.done) notes.push('🔁 <strong>Jour de rattrapage</strong> — cette séance garde ta série.');
+    if (today.recovery) {
+      /* pas de bandeau de plan en récupération */
+    } else if (todayPlan.rescue && !todayPlan.done) notes.push('🔁 <strong>Jour de rattrapage</strong> — cette séance garde ta série.');
     else if (todayPlan.type === 'rest' && !todayPlan.done) notes.push("😌 Aujourd'hui est un jour de repos prévu : tu peux t'entraîner quand même, la séance comptera pour ta semaine.");
     if (today.goalNote) notes.push(`🎯 ${today.goalNote}`);
     if (today.equipmentNote) notes.push(`🧰 ${today.equipmentNote}`);
@@ -460,7 +478,7 @@
     document.getElementById('work-exercise-name').textContent = data.name;
     document.getElementById('work-illustration').innerHTML = renderExerciseMedia(data);
     document.getElementById('work-detail-link').href = `exercise.html?id=${ex.id}`;
-    document.getElementById('work-adjust').style.display = step.phase ? 'none' : 'flex';
+    document.getElementById('work-adjust').style.display = step.phase || today.recovery ? 'none' : 'flex';
 
     const timerEl = document.getElementById('work-timer');
     const doneBtn = document.getElementById('work-done-btn');
@@ -564,6 +582,18 @@
       totalReps: exerciseTally[ex.id] || 0,
       sets: setLog[ex.id] || [],
     }));
+
+    if (today.recovery) {
+      addRecoveryLog({ date: todayISO(), duration: durationMin });
+      showView('summary');
+      speak('Récupération terminée. Bien joué !');
+      document.body.classList.add('is-recovery');
+      document.querySelector('#view-summary h1').textContent = 'Récupération terminée !';
+      document.querySelector('#view-summary .center-col div').textContent = '🧘';
+      document.getElementById('summary-message').textContent = 'Ton corps te remerciera. Cette séance ne compte pas dans ta série.';
+      document.getElementById('summary-duration').textContent = `${durationMin} min`;
+      return;
+    }
 
     const badgesBefore = getBadgeStates().filter((b) => b.unlocked).map((b) => b.id);
 

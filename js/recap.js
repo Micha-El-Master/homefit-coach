@@ -4,6 +4,7 @@ function getWeekRecap(monday) {
   const from = isoOf(monday);
   const to = isoOf(sunday);
   const sessions = getSessionLog().filter((s) => s.date >= from && s.date <= to);
+  const recoveries = getRecoveryLog().filter((s) => s.date >= from && s.date <= to).length;
 
   const feelings = { dur: 0, bien: 0, facile: 0 };
   const perExercise = {};
@@ -36,6 +37,7 @@ function getWeekRecap(monday) {
     from,
     to,
     count: sessions.length,
+    recoveries,
     target: getWeeklyTarget(),
     minutes,
     calories,

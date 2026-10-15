@@ -1,4 +1,4 @@
-const CACHE_NAME = 'homefit-coach-v9';
+const CACHE_NAME = 'homefit-coach-v13';
 const ASSETS = [
   'index.html',
   'dashboard.html',
@@ -20,6 +20,10 @@ const ASSETS = [
   'library.html',
   'recap.html',
   'js/recap.js',
+  'js/meals.js',
+  'js/challenges.js',
+  'challenges.html',
+  'about.html',
   'manifest.json',
   'icons/icon.svg',
   'icons/icon-192.png',
@@ -66,6 +70,25 @@ const ASSETS = [
   'images/exercises/burpees-1.jpg',
   'images/exercises/burpees-2.jpg',
   'images/exercises/burpees-3.jpg',
+  'images/thumbs/burpees.jpg',
+  'images/thumbs/crunch.jpg',
+  'images/thumbs/curl-biceps.jpg',
+  'images/thumbs/dips-chaise.jpg',
+  'images/thumbs/elevations-laterales.jpg',
+  'images/thumbs/extension-triceps.jpg',
+  'images/thumbs/fentes.jpg',
+  'images/thumbs/mollets.jpg',
+  'images/thumbs/mountain-climbers.jpg',
+  'images/thumbs/pike-pushup.jpg',
+  'images/thumbs/planche.jpg',
+  'images/thumbs/pompes.jpg',
+  'images/thumbs/pont-fessier.jpg',
+  'images/thumbs/rowing-serviette.jpg',
+  'images/thumbs/squat-jump.jpg',
+  'images/thumbs/squat.jpg',
+  'images/thumbs/star-jump.jpg',
+  'images/thumbs/superman.jpg',
+  'images/thumbs/tirage-elastique.jpg',
 ];
 
 self.addEventListener('install', (event) => {
@@ -93,6 +116,7 @@ self.addEventListener('fetch', (event) => {
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
         return response;
       })
-      .catch(() => caches.match(event.request))
+      // Hors-ligne : les pages à paramètres (exercise.html?id=…, workout.html?s=…) retombent sur la page en cache.
+      .catch(() => caches.match(event.request, { ignoreSearch: true }))
   );
 });

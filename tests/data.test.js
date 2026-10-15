@@ -69,3 +69,37 @@ test('agenda : si l\'heure du jour est passée, la première occurrence est la s
   app.settings({ trainingDays: [1, 4], reminderTime: '08:00' });
   assert.match(app.run('buildICS()'), /DTSTART:20261019T080000\r\n/);
 });
+
+test('sauvegarde : rappel après 7 jours sans export, seulement si assez de données', () => {
+  const app = createApp(); // 15 octobre 2026
+  app.profile();
+  app.settings({});
+  app.sessions(['2026-10-01', '2026-10-02']);
+  assert.strictEqual(app.run('shouldRemindBackup()'), false, 'moins de 3 séances : rien à perdre');
+  app.sessions(['2026-10-01', '2026-10-02', '2026-10-03']);
+  assert.strictEqual(app.run('daysSinceBackup()'), null);
+  assert.strictEqual(app.run('shouldRemindBackup()'), true, 'jamais sauvegardé');
+  app.run('markBackup()');
+  assert.strictEqual(app.run('daysSinceBackup()'), 0);
+  assert.strictEqual(app.run('shouldRemindBackup()'), false);
+  assert.strictEqual(app.run(`shouldRemindBackup(new Date(2026, 9, 22, 13))`), true, '7 jours plus tard');
+  assert.strictEqual(app.run(`shouldRemindBackup(new Date(2026, 9, 21, 13))`), false, '6 jours plus tard');
+});
+
+test('sauvegarde : « plus tard » reporte le rappel de 3 jours', () => {
+  const app = createApp();
+  app.profile();
+  app.settings({});
+  app.sessions(['2026-10-01', '2026-10-02', '2026-10-03']);
+  assert.strictEqual(app.run('shouldRemindBackup()'), true);
+  app.run('snoozeBackupReminder(3)');
+  assert.strictEqual(app.run('shouldRemindBackup()'), false);
+  assert.strictEqual(app.run(`shouldRemindBackup(new Date(Date.now() + 4 * 86400000))`), true);
+});
+
+test('effacement : supprime toutes les clés de l\'application et rien d\'autre', () => {
+  const app = seeded();
+  app.store.autre_site = 'garde-moi';
+  app.run('eraseAllData()');
+  assert.deepStrictEqual(Object.keys(app.store), ['autre_site']);
+});

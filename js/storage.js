@@ -9,6 +9,8 @@ const STORAGE_KEYS = {
   WATER: 'hfc_water',
   SHOPPING: 'hfc_shopping',
   IN_PROGRESS: 'hfc_inprogress',
+  RECOVERY: 'hfc_recovery',
+  CHALLENGES: 'hfc_challenges',
 };
 
 function readJSON(key, fallback) {
@@ -75,6 +77,9 @@ function getSettings() {
     restSeconds: 45,
     trainingDays: DEFAULT_TRAINING_DAYS,
     equipment: ['chaise', 'charges'],
+    diet: 'omnivore',
+    lastBackupAt: null,
+    backupSnoozeUntil: null,
     voice: false,
     warmup: true,
     cooldown: true,
@@ -134,6 +139,39 @@ function getFeelingTrend() {
   return null;
 }
 
+function getRecoveryLog() {
+  return readJSON(STORAGE_KEYS.RECOVERY, []);
+}
+
+function addRecoveryLog(entry) {
+  const log = getRecoveryLog();
+  log.push(entry);
+  writeJSON(STORAGE_KEYS.RECOVERY, log);
+}
+
+function getChallengeData() {
+  const data = readJSON(STORAGE_KEYS.CHALLENGES, null);
+  return { active: (data && data.active) || {}, history: (data && data.history) || [] };
+}
+
+function saveChallengeData(data) {
+  writeJSON(STORAGE_KEYS.CHALLENGES, data);
+}
+
+function getCompletedChallengeCount() {
+  return getChallengeData().history.filter((h) => h.success).length;
+}
+
+// Objectif d'eau quotidien : 35 ml par kg si le poids est connu, sinon 2 litres.
+function getWaterGoalMl() {
+  const profile = getProfile();
+  return profile && profile.body ? Math.round((profile.body.weight * 35) / 50) * 50 : 2000;
+}
+
+function getWaterOn(iso) {
+  return readJSON(STORAGE_KEYS.WATER, {})[iso] || 0;
+}
+
 function getInProgress() {
   return readJSON(STORAGE_KEYS.IN_PROGRESS, null);
 }
@@ -170,27 +208,44 @@ function daysBetween(isoA, isoB) {
   return Math.round((b - a) / 86400000);
 }
 
+// Un « cycle » = 12 semaines à partir de profile.startDate. Après le cycle, on peut enchaîner (phase 2, entretien, recommencer)
+// via startNextCycle() : startDate repart d'aujourd'hui, la série hebdomadaire reste calculée depuis streakStart.
 function getProgramProgress() {
   const profile = getProfile();
   if (!profile) return null;
-  const dayNumber = Math.max(1, daysBetween(profile.startDate, todayISO()) + 1);
-  const week = Math.min(TOTAL_WEEKS, Math.ceil(dayNumber / 7));
-  const sessions = getSessionLog();
-  const sessionsCompleted = sessions.length;
-  const percent = Math.min(100, Math.round((sessionsCompleted / getTotalProgramSessions()) * 100));
-  const totalMinutes = sessions.reduce((sum, s) => sum + (s.duration || 0), 0);
-  const totalCalories = sessions.reduce((sum, s) => sum + (s.calories || 0), 0);
+  const rawDay = Math.max(1, daysBetween(profile.startDate, todayISO()) + 1);
+  const week = Math.min(TOTAL_WEEKS, Math.ceil(rawDay / 7));
+  const allSessions = getSessionLog();
+  const cycleSessions = allSessions.filter((s) => s.date >= profile.startDate);
+  const sessionsCompleted = cycleSessions.length;
+  const total = getTotalProgramSessions();
+  const percent = Math.min(100, Math.round((sessionsCompleted / total) * 100));
+  const totalMinutes = allSessions.reduce((sum, s) => sum + (s.duration || 0), 0);
+  const totalCalories = allSessions.reduce((sum, s) => sum + (s.calories || 0), 0);
   return {
-    dayNumber: Math.min(dayNumber, TOTAL_WEEKS * 7),
+    dayNumber: Math.min(rawDay, TOTAL_WEEKS * 7),
     week,
     totalWeeks: TOTAL_WEEKS,
     sessionsCompleted,
-    totalProgramSessions: getTotalProgramSessions(),
+    totalProgramSessions: total,
     percent,
     totalMinutes,
     totalCalories,
+    cycle: profile.cycle || 1,
+    mode: profile.mode || 'standard',
+    finished: rawDay > TOTAL_WEEKS * 7 || sessionsCompleted >= total,
   };
 }
+
+function startNextCycle(mode) {
+  const profile = getProfile();
+  profile.streakStart = profile.streakStart || profile.startDate;
+  profile.startDate = todayISO();
+  profile.cycle = (profile.cycle || 1) + 1;
+  profile.mode = mode;
+  saveProfile(profile);
+}
+
 
 function isoOf(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -213,7 +268,7 @@ function getWeekPlan(now = new Date()) {
   const sessionDates = new Set(getSessionLog().map((s) => s.date));
   const todayIso = isoOf(now);
   const profile = getProfile();
-  const startIso = profile ? profile.startDate : '0000-00-00';
+  const startIso = profile ? profile.streakStart || profile.startDate : '0000-00-00';
   let debt = 0;
   const days = [];
 
@@ -252,7 +307,8 @@ function getStreak() {
   const profile = getProfile();
   if (!profile) return 0;
   const sessions = getSessionLog();
-  const startMonday = mondayOf(new Date(profile.startDate + 'T00:00:00'));
+  const streakStart = profile.streakStart || profile.startDate;
+  const startMonday = mondayOf(new Date(streakStart + 'T00:00:00'));
   const currentMonday = mondayOf(new Date());
   let streak = 0;
 
@@ -266,7 +322,7 @@ function getStreak() {
     const weeklyTarget = getWeeklyTarget();
     let target = weeklyTarget;
     if (monday.getTime() === startMonday.getTime()) {
-      const daysLeft = 7 - daysBetween(from, profile.startDate);
+      const daysLeft = 7 - daysBetween(from, streakStart);
       target = Math.min(weeklyTarget, daysLeft);
     }
 
@@ -290,6 +346,8 @@ function collectExportData() {
     adjustments: getAdjustments(),
     water: readJSON(STORAGE_KEYS.WATER, {}),
     shopping: readJSON(STORAGE_KEYS.SHOPPING, []),
+    recovery: getRecoveryLog(),
+    challenges: getChallengeData(),
   };
 }
 
@@ -304,9 +362,33 @@ function downloadBlob(blob, filename) {
   URL.revokeObjectURL(url);
 }
 
+function markBackup() {
+  saveSettings({ ...getSettings(), lastBackupAt: new Date().toISOString(), backupSnoozeUntil: null });
+}
+
+// Jours écoulés depuis la dernière sauvegarde (null si jamais).
+function daysSinceBackup(now = new Date()) {
+  const at = getSettings().lastBackupAt;
+  return at ? Math.floor((now.getTime() - new Date(at).getTime()) / 86400000) : null;
+}
+
+// Rappel de sauvegarde : au moins 3 séances à perdre, aucune sauvegarde depuis 7 jours, et pas de report en cours.
+function shouldRemindBackup(now = new Date()) {
+  if (getSessionLog().length < 3) return false;
+  const snooze = getSettings().backupSnoozeUntil;
+  if (snooze && new Date(snooze).getTime() > now.getTime()) return false;
+  const days = daysSinceBackup(now);
+  return days === null || days >= 7;
+}
+
+function snoozeBackupReminder(days = 3) {
+  saveSettings({ ...getSettings(), backupSnoozeUntil: new Date(Date.now() + days * 86400000).toISOString() });
+}
+
 function exportData() {
   const blob = new Blob([JSON.stringify(collectExportData(), null, 2)], { type: 'application/json' });
   downloadBlob(blob, `homefit-coach-${todayISO()}.json`);
+  markBackup();
 }
 
 // Partage natif (AirDrop, messages…) du fichier de sauvegarde, quand le navigateur le permet.
@@ -316,6 +398,7 @@ async function shareDataFile() {
   });
   if (!navigator.canShare || !navigator.canShare({ files: [file] })) return false;
   await navigator.share({ files: [file], title: 'Sauvegarde HomeFit Coach' });
+  markBackup();
   return true;
 }
 
@@ -339,7 +422,18 @@ function importData(jsonString) {
   writeJSON(STORAGE_KEYS.ADJUST, data.adjustments || {});
   writeJSON(STORAGE_KEYS.WATER, data.water || {});
   writeJSON(STORAGE_KEYS.SHOPPING, data.shopping || []);
+  writeJSON(STORAGE_KEYS.RECOVERY, data.recovery || []);
+  if (data.challenges) writeJSON(STORAGE_KEYS.CHALLENGES, data.challenges);
+  else localStorage.removeItem(STORAGE_KEYS.CHALLENGES);
   clearInProgress();
+}
+
+// Efface toutes les données de l'application (clés hfc_*) sur cet appareil.
+function eraseAllData() {
+  const keys = [];
+  for (let i = 0; i < localStorage.length; i++) keys.push(localStorage.key(i));
+  keys.filter((k) => k && k.startsWith('hfc_')).forEach((k) => localStorage.removeItem(k));
+  if (typeof sessionStorage !== 'undefined') sessionStorage.clear();
 }
 
 function bytesToBase64(bytes) {

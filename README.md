@@ -4,12 +4,14 @@ Application web (HTML / CSS / JavaScript, sans serveur) pour suivre un programme
 
 ## Fonctionnalités
 
-- Programme de 12 semaines avec progression (semaines allégées), variantes selon l'objectif et le matériel disponible
+- Programme de 12 semaines avec progression (semaines allégées), variantes selon l'objectif et le matériel disponible ; à la fin : phase 2, mode entretien ou nouveau cycle
 - Jours d'entraînement au choix, rattrapage automatique des séances manquées, série hebdomadaire
 - Séance guidée : minuteurs, répétitions réelles, échauffement et étirements, coach vocal, reprise après pause
-- Bibliothèque d'exercices avec photos, bilan de la semaine, nutrition (besoins, eau, courses), routine Kegel
-- Rappels via un fichier agenda (.ics), transfert des données entre appareils (code ou fichier)
-- Thème automatique, taille de texte réglable, animations réductibles
+- Séance de récupération (jours de repos), défis personnels (pompes, gainage, squats, Kegel, hydratation)
+- Bibliothèque d'exercices avec photos, bilan de la semaine, coach à règles (10 situations, conseil selon tes données)
+- Nutrition : besoins, menus sur 7 jours (classique, végétarien, sans lactose), eau, liste de courses ; routine Kegel
+- Rappels via un fichier agenda (.ics), transfert des données entre appareils (code ou fichier), rappel de sauvegarde
+- Hors-ligne (PWA), thème automatique, taille de texte réglable, animations réductibles, page À propos
 
 ## Lancer en local
 

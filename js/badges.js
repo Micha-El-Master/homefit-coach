@@ -42,6 +42,20 @@ const BADGES = [
     isUnlocked: (ctx) => ctx.kegelLog.length >= 7,
   },
   {
+    id: 'challenge-1',
+    icon: '🎯',
+    label: 'Premier défi relevé',
+    description: 'Terminer un défi personnel (80 % des jours validés).',
+    isUnlocked: (ctx) => ctx.challenges >= 1,
+  },
+  {
+    id: 'challenge-3',
+    icon: '🥇',
+    label: '3 défis relevés',
+    description: 'Terminer trois défis personnels.',
+    isUnlocked: (ctx) => ctx.challenges >= 3,
+  },
+  {
     id: 'program-complete',
     icon: '🏆',
     label: 'Programme terminé',
@@ -55,6 +69,7 @@ function getBadgeContext() {
     sessions: getSessionLog(),
     kegelLog: getKegelLog(),
     streak: getStreak(),
+    challenges: getCompletedChallengeCount(),
   };
 }
 

@@ -19,6 +19,11 @@
     <p style="color:var(--text-muted); font-size:14px; margin:0; text-align:center;">Dis-moi comment tu te sens, j'adapte ta séance du jour.</p>
   </div>
 
+  <div class="card" id="advice-card" style="background:var(--primary-light);">
+    <h2>💡 Conseil du moment</h2>
+    <p id="advice-text" style="font-size:14px; line-height:1.6; margin:0;"></p>
+  </div>
+
   <div class="situation-grid" id="situation-list"></div>
 
   <div class="coach-response" id="response-box" style="display:none;">
@@ -31,6 +36,8 @@
 <nav class="bottom-nav" id="bottom-nav" aria-label="Navigation principale"></nav>
 
 <script src="js/storage.js"></script>
+<script src="js/exercises.js"></script>
+<script src="js/recap.js"></script>
 <script src="js/app.js"></script>
 <script>
   const SITUATIONS = [
@@ -74,7 +81,66 @@
       response: "Pas grave du tout : une séance manquée n'efface pas ta progression. Si ton prochain jour était un jour de repos, il devient automatiquement un jour de rattrapage (🔁) pour garder ta série. Reprends simplement, sans culpabiliser.",
       adaptation: null,
     },
+    {
+      id: 'courbatures',
+      emoji: '🫠',
+      label: "J'ai des courbatures",
+      desc: 'Muscles endoloris de la veille',
+      response: "Des courbatures légères sont normales et ne demandent pas de repos total. On allège la séance (une série en moins, repos plus courts). Si elles sont vraiment fortes, privilégie la séance de récupération.",
+      adaptation: { type: 'light' },
+    },
+    {
+      id: 'voyage',
+      emoji: '🧳',
+      label: 'Je suis en déplacement',
+      desc: 'Pas de matériel sous la main',
+      response: "On remplace les exercices qui demandent du matériel par des mouvements au poids du corps. La séance peut être plus courte : c'est normal, l'important est de rester régulier.",
+      adaptation: { type: 'no-equipment' },
+    },
+    {
+      id: 'motivation',
+      emoji: '😶',
+      label: "Je n'ai pas la motivation",
+      desc: 'Envie de rien aujourd\'hui',
+      response: "Fais une version express : 3 exercices, 2 séries chacun, environ 10 minutes. Commence seulement l'échauffement : le plus dur est de démarrer, et une petite séance compte quand même pour ta semaine.",
+      adaptation: { type: 'mini' },
+    },
+    {
+      id: 'pause',
+      emoji: '⏳',
+      label: 'Je reprends après une pause',
+      desc: 'Plusieurs jours ou semaines sans séance',
+      response: "Reprise en douceur : une série en moins et environ 20 % de répétitions en moins. Écoute ton corps, et remonte progressivement avec « Trop facile » si tu te sens bien.",
+      adaptation: { type: 'comeback' },
+    },
+    {
+      id: 'epaule',
+      emoji: '🤕',
+      label: "J'ai mal à l'épaule ou au poignet",
+      desc: 'Gêne en poussant ou en portant',
+      response: "On remplace les exercices du haut du corps par des alternatives. Si la douleur est vive, persiste ou s'accompagne d'engourdissements, arrête et consulte un professionnel de santé : cette app ne remplace pas un avis médical.",
+      adaptation: { type: 'swap-categories', categories: ['Haut du corps'] },
+    },
   ];
+
+  // Conseil tiré de tes données : longue absence, ressenti récent, ou bilan de la semaine en cours.
+  (function showAdvice() {
+    const log = getSessionLog();
+    const last = log.length ? log[log.length - 1].date : null;
+    const gap = last ? daysBetween(last, todayISO()) : null;
+    const trend = getFeelingTrend();
+    let text;
+    if (gap !== null && gap >= 10) {
+      text = `Ta dernière séance date de ${gap} jours. Choisis « Je reprends après une pause » pour une reprise en douceur.`;
+    } else if (trend === 'dur') {
+      text = 'Tes deux dernières séances étaient dures : la prochaine est déjà allégée. Si tu es fatigué, choisis « Je suis fatigué(e) ».';
+    } else if (trend === 'facile') {
+      text = 'Tes deux dernières séances étaient faciles : la prochaine est un peu plus intense. Utilise « Trop facile » pendant la séance pour monter encore.';
+    } else {
+      text = getWeekTip(getWeekRecap(mondayOf(new Date())), true);
+    }
+    document.getElementById('advice-text').textContent = text;
+  })();
 
   const list = document.getElementById('situation-list');
   list.innerHTML = SITUATIONS.map(

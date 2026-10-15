@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>À propos — HomeFit Coach</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<meta name="theme-color" content="#d4361a" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="app-shell" role="main">
+  <div class="topbar">
+    <h1>ℹ️ À propos</h1>
+    <div class="topbar-actions">
+      <a href="settings.html" class="icon-btn" aria-label="Réglages" title="Réglages">⚙️</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>HomeFit Coach <span id="version" style="font-weight:400; color:var(--text-muted); font-size:13px;"></span></h2>
+    <p style="font-size:14px; line-height:1.6; margin:0;">Un coach de fitness à domicile : programme de 12 semaines, séances guidées, suivi, nutrition et routine Kegel. Le code source est public : <a href="https://github.com/Micha-El-Master/homefit-coach" target="_blank" rel="noopener" style="color:var(--primary); font-weight:600;">github.com/Micha-El-Master/homefit-coach</a>.</p>
+  </div>
+
+  <div class="card">
+    <h2>⚕️ Santé</h2>
+    <p style="font-size:14px; line-height:1.6; margin:0;">Les programmes, les calculs nutritionnels et les conseils sont <strong>indicatifs</strong> et ne remplacent pas l'avis d'un médecin ou d'un professionnel de santé. Demande conseil avant de commencer si tu as une pathologie, une blessure, un problème cardiaque, ou si tu es enceinte. Arrête immédiatement en cas de douleur vive, de vertige ou de malaise.</p>
+  </div>
+
+  <div class="card">
+    <h2>🔒 Confidentialité</h2>
+    <ul style="font-size:14px; line-height:1.7; padding-left:18px; margin:0; list-style:disc;">
+      <li>Pas de compte, pas de publicité, pas de suivi, pas de cookies.</li>
+      <li>Toutes tes données (profil, séances, poids saisi, réglages) restent <strong>sur cet appareil</strong>, dans le navigateur. Rien n'est envoyé à un serveur.</li>
+      <li>Le site est hébergé par GitHub Pages, qui peut voir, comme tout hébergeur, les requêtes de chargement de la page (adresse IP, par exemple) mais pas tes données.</li>
+      <li>Pour changer d'appareil, tu exportes toi-même un fichier ou un code de transfert.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>🖼️ Crédits et licences</h2>
+    <ul style="font-size:14px; line-height:1.7; padding-left:18px; margin:0; list-style:disc;">
+      <li>Photos des exercices : <a href="https://github.com/yuhonas/free-exercise-db" target="_blank" rel="noopener" style="color:var(--primary); font-weight:600;">free-exercise-db</a>, licence Unlicense (domaine public).</li>
+      <li>Photos des burpees : Taco Fleur, <a href="https://commons.wikimedia.org/wiki/Category:Burpee" target="_blank" rel="noopener" style="color:var(--primary); font-weight:600;">Wikimedia Commons</a>, licence <a href="https://creativecommons.org/licenses/by-sa/4.0/deed.fr" target="_blank" rel="noopener" style="color:var(--primary); font-weight:600;">CC BY-SA 4.0</a>, redimensionnées.</li>
+      <li>Les emojis et silhouettes d'exercices sont ceux de ton système ou dessinés pour l'application.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>💾 Mes données sur cet appareil</h2>
+    <button class="btn btn-secondary" id="install-btn" style="display:none; margin-bottom:10px;">📲 Installer l'application</button>
+    <a href="settings.html#donnees" class="btn btn-secondary" style="margin-bottom:10px;">Sauvegarder ou transférer mes données</a>
+    <button class="btn btn-outline" id="erase-btn" style="border-color:var(--danger); color:var(--danger);">🗑️ Effacer toutes mes données</button>
+    <p style="font-size:12px; color:var(--text-muted); margin:10px 0 0;">L'effacement est définitif sur cet appareil. Pense à sauvegarder avant.</p>
+  </div>
+</div>
+
+<nav class="bottom-nav" id="bottom-nav" aria-label="Navigation principale"></nav>
+
+<script src="js/storage.js"></script>
+<script src="js/app.js"></script>
+<script>
+  document.getElementById('version').textContent = `version ${APP_VERSION}`;
+
+  const installBtn = document.getElementById('install-btn');
+  function showInstall() {
+    if (!installPromptEvent || isStandalone()) return;
+    installBtn.style.display = 'flex';
+  }
+  document.addEventListener('install-available', showInstall);
+  showInstall();
+  installBtn.addEventListener('click', async () => {
+    if (await promptInstall()) installBtn.style.display = 'none';
+  });
+
+  document.getElementById('erase-btn').addEventListener('click', () => {
+    if (!confirm('Effacer définitivement toutes tes données (profil, séances, réglages) sur cet appareil ?')) return;
+    if (!confirm('Dernière confirmation : cette action est irréversible. Continuer ?')) return;
+    eraseAllData();
+    location.href = 'index.html';
+  });
+</script>
+</body>
+</html>

@@ -15,7 +15,7 @@
   <h1 style="margin-top:0;">⚙️ Réglages</h1>
 
   <div class="card">
-    <h3>Mon programme</h3>
+    <h2>Mon programme</h2>
     <p style="font-size:14px; margin:0 0 10px;" id="profile-name"></p>
     <div class="settings-row">
       <div>
@@ -48,7 +48,7 @@
   </div>
 
   <div class="card">
-    <h3>Apparence et accessibilité</h3>
+    <h2>Apparence et accessibilité</h2>
     <div class="settings-row">
       <div>
         <label class="row-label" for="theme-select">Thème</label>
@@ -84,7 +84,7 @@
   </div>
 
   <div class="card">
-    <h3>Entraînement</h3>
+    <h2>Entraînement</h2>
     <div style="padding:0 0 10px; border-bottom:1px solid var(--border);">
       <div class="row-label">Mes jours d'entraînement</div>
       <div class="row-desc">Coche les jours où tu t'entraînes, les autres sont tes jours de repos. Le nombre de jours coché devient ton objectif de la semaine.</div>
@@ -115,7 +115,7 @@
   </div>
 
   <div class="card">
-    <h3>Rappel quotidien</h3>
+    <h2>Rappel quotidien</h2>
     <div class="settings-row">
       <div>
         <div class="row-label" id="reminder-label">Activer les rappels</div>
@@ -127,7 +127,7 @@
       </label>
     </div>
     <div class="settings-row" id="reminder-time-row" style="display:none;">
-      <div class="row-label">Heure du rappel</div>
+      <label class="row-label" for="reminder-time">Heure du rappel</label>
       <input type="time" class="form-input" id="reminder-time" style="width:120px;" />
     </div>
     <button class="btn btn-secondary" id="ics-btn" style="margin-top:12px; font-size:14px; padding:12px;">📅 Ajouter mes séances à mon agenda</button>
@@ -136,9 +136,11 @@
   </div>
 
   <div class="card">
-    <h3>Mes données</h3>
+    <h2 id="donnees">Mes données</h2>
+    <p id="data-status" style="font-size:13px; margin:0 0 12px; line-height:1.6;"></p>
     <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">Tes données restent stockées dans ce navigateur, sur cet appareil. Pour les retrouver sur un autre appareil, utilise le code de transfert ou un fichier.</p>
 
+    <a href="about.html" style="display:inline-block; margin-bottom:12px; font-size:13px; color:var(--primary); font-weight:600;">ℹ️ À propos, confidentialité et crédits</a><br>
     <button class="btn btn-secondary" id="code-copy-btn" style="margin-bottom:10px;">📋 Copier mon code de transfert</button>
     <label class="row-label" for="code-input" style="display:block; margin-top:6px;">Coller un code reçu d'un autre appareil</label>
     <textarea class="form-input" id="code-input" rows="3" placeholder="HFC1:…" style="margin:6px 0 10px; font-family:monospace; font-size:12px;"></textarea>
@@ -283,6 +285,16 @@
 
   document.getElementById('ics-btn').addEventListener('click', downloadICS);
 
+  async function renderDataStatus() {
+    const days = daysSinceBackup();
+    const persisted = await ensurePersistentStorage();
+    document.getElementById('data-status').innerHTML =
+      `<strong>Dernière sauvegarde :</strong> ${days === null ? 'jamais' : days === 0 ? "aujourd'hui" : `il y a ${days} jour${days > 1 ? 's' : ''}`}<br>` +
+      `<strong>Application installée :</strong> ${isStandalone() ? 'oui ✅' : 'non (ajoute-la à ton écran d’accueil)'}<br>` +
+      `<strong>Stockage protégé :</strong> ${persisted ? 'oui ✅' : 'non (le navigateur peut effacer les données)'}`;
+  }
+  renderDataStatus();
+
   const status = document.getElementById('import-status');
   function showStatus(message, ok) {
     status.style.display = 'block';
@@ -294,12 +306,15 @@
     setTimeout(() => location.reload(), 900);
   }
 
-  document.getElementById('export-btn').addEventListener('click', exportData);
+  document.getElementById('export-btn').addEventListener('click', () => {
+    exportData();
+    renderDataStatus();
+  });
 
   if (navigator.canShare && navigator.canShare({ files: [new File(['{}'], 'x.json', { type: 'application/json' })] })) {
     const shareBtn = document.getElementById('share-btn');
     shareBtn.style.display = 'flex';
-    shareBtn.addEventListener('click', () => shareDataFile().catch(() => {}));
+    shareBtn.addEventListener('click', () => shareDataFile().then(renderDataStatus).catch(() => {}));
   }
 
   document.getElementById('code-copy-btn').addEventListener('click', async () => {
@@ -307,6 +322,8 @@
     try {
       code = await buildTransferCode();
       await navigator.clipboard.writeText(code);
+      markBackup();
+      renderDataStatus();
       showStatus(`✔ Code copié (${code.length} caractères). Colle-le dans un message, puis dans Réglages sur l'autre appareil.`, true);
     } catch (err) {
       // Presse-papiers refusé : on affiche le code, sélectionné, pour le copier à la main.

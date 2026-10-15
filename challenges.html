@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Défis — HomeFit Coach</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<meta name="theme-color" content="#d4361a" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="app-shell" role="main">
+  <div class="topbar">
+    <h1>🎯 Défis</h1>
+    <div class="topbar-actions">
+      <a href="dashboard.html" class="icon-btn" aria-label="Retour à l'accueil" title="Retour à l'accueil">🏠</a>
+    </div>
+  </div>
+  <p style="font-size:13px; color:var(--text-muted); margin:-8px 0 16px;">Un défi est relevé si tu valides au moins 80 % de ses jours : un jour manqué ne fait pas tout échouer.</p>
+
+  <section id="active-section" aria-labelledby="active-title">
+    <h2 id="active-title" style="font-size:16px;">En cours</h2>
+    <div id="active-list"></div>
+  </section>
+
+  <section aria-labelledby="catalog-title">
+    <h2 id="catalog-title" style="font-size:16px;">Proposés</h2>
+    <div id="catalog-list"></div>
+  </section>
+
+  <section id="history-section" aria-labelledby="history-title" style="display:none;">
+    <h2 id="history-title" style="font-size:16px;">Terminés</h2>
+    <div class="card" id="history-list"></div>
+  </section>
+</div>
+
+<nav class="bottom-nav" id="bottom-nav" aria-label="Navigation principale"></nav>
+
+<script src="js/storage.js"></script>
+<script src="js/challenges.js"></script>
+<script src="js/app.js"></script>
+<script>
+  const pending = {}; // valeur saisie par défi manuel avant validation
+
+  function render() {
+    finalizeChallenges();
+    const data = getChallengeData();
+    const todayIso = todayISO();
+
+    const activeIds = Object.keys(data.active);
+    document.getElementById('active-section').style.display = activeIds.length ? 'block' : 'none';
+    document.getElementById('active-list').innerHTML = activeIds
+      .map((id) => {
+        const def = CHALLENGES[id];
+        const st = getChallengeStatus(id, data.active[id], todayIso);
+        const today = st.days.find((d) => d.iso === todayIso);
+        const cells = st.days
+          .map((d) => {
+            const cls = ['calendar-cell', d.status === 'done' ? 'has-session' : '', d.status === 'today' ? 'today' : '', d.status === 'missed' ? 'missed' : '', d.status === 'rest' ? 'rest' : ''].join(' ');
+            const label = `Jour ${d.day} : ${{ done: 'validé', missed: 'manqué', rest: 'repos', today: "aujourd'hui", future: 'à venir' }[d.status]}`;
+            return `<div class="${cls}" title="${label}" aria-label="${label}">${d.day}</div>`;
+          })
+          .join('');
+
+        let action;
+        if (!today) {
+          action = '';
+        } else if (today.rest) {
+          action = '<p style="font-size:14px; margin:0 0 12px;">😌 Jour de repos : rien à faire aujourd’hui.</p>';
+        } else if (def.auto) {
+          const shown = def.auto === 'water' ? `${today.value} / ${today.target} ml` : today.value ? 'Routine faite ✅' : 'Pas encore faite aujourd’hui';
+          action = `<p style="font-size:14px; margin:0 0 12px;">Suivi automatique : <strong>${shown}</strong></p>`;
+        } else {
+          const done = today.value >= today.target;
+          pending[id] = pending[id] ?? (today.value || today.target);
+          action = `<div class="stepper" style="margin:0 0 12px;">
+              <span class="stepper-label">Aujourd'hui : objectif ${today.target} ${def.unit}${done ? ' ✅ validé' : ''}</span>
+              <div class="stepper-controls">
+                <button type="button" data-act="minus" data-id="${id}" aria-label="Moins">−</button>
+                <output aria-live="polite">${pending[id]}</output>
+                <button type="button" data-act="plus" data-id="${id}" aria-label="Plus">+</button>
+              </div>
+            </div>
+            <button class="btn btn-primary" data-act="log" data-id="${id}" style="padding:12px; font-size:14px; margin-bottom:12px;">✔ Enregistrer ma journée</button>`;
+        }
+
+        return `<div class="card">
+          <h2>${def.icon} ${def.name}</h2>
+          <p style="font-size:13px; color:var(--text-muted); margin:-6px 0 12px;">Jour ${Math.min(st.dayNumber, def.days)}/${def.days} · ${st.validated}/${st.required} jours validés</p>
+          ${action}
+          <div class="calendar-grid" style="grid-template-columns: repeat(10, 1fr);">${cells}</div>
+          <button class="btn btn-secondary" data-act="abandon" data-id="${id}" style="margin-top:12px; padding:8px; font-size:12px;">Abandonner ce défi</button>
+        </div>`;
+      })
+      .join('');
+
+    document.getElementById('catalog-list').innerHTML = Object.entries(CHALLENGES)
+      .filter(([id]) => !data.active[id])
+      .map(
+        ([id, def]) => `<div class="card">
+          <h2>${def.icon} ${def.name}</h2>
+          <p style="font-size:14px; margin:-6px 0 12px; line-height:1.5;">${def.desc}</p>
+          <button class="btn btn-outline" data-act="start" data-id="${id}" style="padding:12px; font-size:14px;">Commencer</button>
+        </div>`
+      )
+      .join('') || '<p style="font-size:13px; color:var(--text-muted);">Tous les défis sont en cours. Bravo !</p>';
+
+    document.getElementById('history-section').style.display = data.history.length ? 'block' : 'none';
+    document.getElementById('history-list').innerHTML = data.history
+      .slice()
+      .reverse()
+      .map((h) => {
+        const def = CHALLENGES[h.id];
+        return `<div class="history-item"><span>${h.success ? '🏅' : '❌'} ${def.name}</span><span>${h.validated}/${h.required}</span></div>`;
+      })
+      .join('');
+  }
+
+  document.querySelector('.app-shell').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-act]');
+    if (!btn) return;
+    const id = btn.dataset.id;
+    const act = btn.dataset.act;
+    if (act === 'start') startChallenge(id);
+    if (act === 'abandon' && confirm('Abandonner ce défi ? Sa progression sera perdue.')) abandonChallenge(id);
+    if (act === 'plus') pending[id] = (pending[id] || 0) + 1;
+    if (act === 'minus') pending[id] = Math.max(0, (pending[id] || 0) - 1);
+    if (act === 'log') {
+      logChallenge(id, pending[id]);
+      delete pending[id];
+    }
+    render();
+  });
+
+  render();
+</script>
+</body>
+</html>

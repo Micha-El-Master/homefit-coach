@@ -140,3 +140,86 @@ test('crédits : chaque photo sous licence CC BY-SA est créditée, les autres c
   assert.match(app.run(`photoCredit(EXERCISES['squat'])`), /free-exercise-db/);
   assert.strictEqual(app.run(`photoCredit(EXERCISES['jumping-jacks'])`), '');
 });
+
+test('cycles : fin de programme détectée, séances comptées depuis le début du cycle', () => {
+  const app = createApp(); // 15 octobre 2026
+  app.profile({ startDate: '2026-07-01' }); // 107 jours : programme terminé
+  app.settings({ trainingDays: [1, 2, 4, 5] });
+  app.sessions(['2026-07-10', '2026-09-30', '2026-10-05']);
+  let p = app.run('getProgramProgress()');
+  assert.strictEqual(p.finished, true);
+  assert.strictEqual(p.week, 12);
+  assert.strictEqual(p.sessionsCompleted, 3);
+
+  app.run(`startNextCycle('phase2')`);
+  p = app.run('getProgramProgress()');
+  assert.strictEqual(p.finished, false);
+  assert.strictEqual(p.cycle, 2);
+  assert.strictEqual(p.mode, 'phase2');
+  assert.strictEqual(p.week, 1);
+  assert.strictEqual(p.sessionsCompleted, 0, 'le nouveau cycle repart de zéro');
+  assert.strictEqual(app.run('getProfile().streakStart'), '2026-07-01', 'le début de la série d\'origine est conservé');
+});
+
+test('cycles : la série n\'est pas remise à zéro par un nouveau cycle', () => {
+  const app = createApp();
+  app.profile({ startDate: '2026-07-01' });
+  app.settings({ trainingDays: [1, 2, 4, 5] });
+  app.sessions(['2026-09-29', '2026-09-30', '2026-10-02', '2026-10-03', '2026-10-05', '2026-10-06', '2026-10-08', '2026-10-09']);
+  const before = app.run('getStreak()');
+  assert.strictEqual(before, 2);
+  app.run(`startNextCycle('standard')`); // le 15 octobre
+  assert.strictEqual(app.run('getStreak()'), 2);
+});
+
+test('phase 2 : +20 % ; entretien : niveau constant, sans semaine allégée ni série en plus', () => {
+  const app = createApp();
+  app.settings({});
+  const scale = (week, mode) => app.run(`scaleExercise({ id: 'squat', sets: 3, reps: 15 }, 'intermediaire', ${week}, null, '${mode}')`);
+  assert.strictEqual(scale(1, 'standard').reps, 15);
+  assert.strictEqual(scale(1, 'phase2').reps, 18);
+  assert.strictEqual(scale(4, 'maintenance').reps, 15, 'pas de semaine allégée en entretien');
+  assert.strictEqual(scale(10, 'maintenance').reps, 15);
+  assert.strictEqual(scale(10, 'maintenance').sets, 3);
+  assert.strictEqual(scale(10, 'standard').sets, 4);
+  assert.strictEqual(app.run(`getWeekPhase(4, 'maintenance').deload`), false);
+});
+
+test('récupération : séance à part, ne compte ni dans les séances ni dans la série', () => {
+  const app = createApp();
+  app.profile();
+  app.settings({});
+  const w = app.run(`getTodayWorkout(getProfile(), 'Récupération')`);
+  assert.strictEqual(w.recovery, true);
+  assert.ok(w.exercises.length >= 8);
+  const missing = w.exercises.filter((e) => !app.run(`!!EXERCISES['${e.id}']`));
+  assert.deepStrictEqual(missing, []);
+  const minutes = w.exercises.reduce((s, e) => s + e.holdSeconds, 0) / 60;
+  assert.ok(minutes >= 5 && minutes <= 10, `durée cohérente (${minutes} min)`);
+
+  app.run(`addRecoveryLog({ date: '2026-10-14', duration: 8 })`);
+  assert.strictEqual(app.run('getSessionLog().length'), 0);
+  assert.strictEqual(app.run('getProgramProgress().sessionsCompleted'), 0);
+  assert.strictEqual(app.run('getRecoveryLog().length'), 1);
+  assert.strictEqual(app.run(`getWeekRecap(mondayOf(new Date(2026, 9, 14))).recoveries`), 1);
+});
+
+test('récupération : sauvegardée et restaurée avec le reste', () => {
+  const app = createApp();
+  app.profile({ name: 'Bob' });
+  app.run(`addRecoveryLog({ date: '2026-10-14', duration: 8 })`);
+  const json = JSON.stringify(app.run('collectExportData()'));
+  const other = createApp();
+  other.run(`importData(${JSON.stringify(json)})`);
+  assert.strictEqual(other.run('getRecoveryLog().length'), 1);
+});
+
+test('intégrité : chaque exercice avec photo a sa miniature pour la bibliothèque', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const { ROOT } = require('./helpers');
+  const app = createApp();
+  const bases = app.run('[...new Set([...PHOTO_EXERCISES].map((id) => PHOTO_ALIAS[id] || id))]');
+  const absent = bases.filter((b) => !fs.existsSync(path.join(ROOT, 'images', 'thumbs', `${b}.jpg`)));
+  assert.deepStrictEqual(absent, []);
+});

@@ -38,15 +38,33 @@
     </div>
   </div>
 
+  <div class="card" id="backup-card" style="display:none; border:1.5px solid var(--primary);">
+    <h2 id="backup-title">💾 Pense à sauvegarder tes données</h2>
+    <p id="backup-text" style="font-size:13px; margin:0 0 12px; line-height:1.5;"></p>
+    <div style="display:flex; gap:8px;">
+      <a href="settings.html#donnees" class="btn btn-primary" style="padding:10px; font-size:14px;">Sauvegarder</a>
+      <button class="btn btn-secondary" id="backup-snooze" style="padding:10px; font-size:14px;">Plus tard</button>
+    </div>
+  </div>
+
+  <div class="card" id="cycle-card" style="display:none; border:1.5px solid var(--primary);">
+    <h2>🏁 Programme de 12 semaines terminé !</h2>
+    <p style="font-size:14px; margin:0 0 12px;">Bravo ! Ta série est conservée. Choisis la suite :</p>
+    <button class="btn btn-primary" data-next="phase2" style="margin-bottom:8px;">🚀 Phase 2 : 12 semaines plus exigeantes (+20 %)</button>
+    <button class="btn btn-secondary" data-next="maintenance" style="margin-bottom:8px;">🛡️ Entretien : garder mon niveau, sans progression</button>
+    <button class="btn btn-outline" data-next="standard">🔄 Recommencer le programme depuis le début</button>
+  </div>
+
   <div class="card" id="today-card">
     <h2 id="today-title">Aujourd'hui</h2>
     <p id="today-subtitle" style="color:var(--text-muted); font-size:14px; margin-top:-8px;"></p>
     <p id="today-duration" style="font-size:14px;"></p>
     <a id="today-cta" class="btn btn-primary" href="workout.html">Commencer l'entraînement</a>
+    <a id="recovery-link" class="btn btn-outline" href="workout.html?s=R%C3%A9cup%C3%A9ration" style="display:none; margin-top:10px;">🧘 Séance de récupération (~8 min)</a>
   </div>
 
   <div class="card">
-    <h3>📅 Ma semaine</h3>
+    <h2>📅 Ma semaine</h2>
     <div class="week-strip" id="week-strip"></div>
     <p class="week-strip-legend">✅ fait · 🏋️ entraînement · 😌 repos · 🔁 rattrapage · ❌ manqué</p>
     <p id="week-alert" style="display:none; font-size:13px; margin:10px 0 0; color:var(--primary-dark); font-weight:600;"></p>
@@ -54,13 +72,13 @@
   </div>
 
   <div class="card" id="recap-card" style="display:none; background:var(--primary-light);">
-    <h3>📊 Ton bilan de la semaine</h3>
+    <h2>📊 Ton bilan de la semaine</h2>
     <p style="font-size:14px; margin:0 0 10px;">La semaine se termine : vois ce que tu as accompli et le conseil pour la suite.</p>
     <a href="recap.html" class="btn btn-primary" style="padding:12px; font-size:14px;">Voir mon bilan</a>
   </div>
 
   <div class="card">
-    <h3>Accès rapide</h3>
+    <h2>Accès rapide</h2>
     <div style="display:flex; gap:10px; flex-wrap:wrap;">
       <a href="coach.html" class="btn btn-secondary" style="width:auto; flex:1 1 45%;">🧠 Coach</a>
       <a href="nutrition.html" class="btn btn-secondary" style="width:auto; flex:1 1 45%;">🥗 Nutrition</a>
@@ -68,6 +86,8 @@
       <a href="progress.html" class="btn btn-secondary" style="width:auto; flex:1 1 45%;">📈 Progrès</a>
       <a href="library.html" class="btn btn-secondary" style="width:auto; flex:1 1 45%;">📚 Exercices</a>
       <a href="recap.html" class="btn btn-secondary" style="width:auto; flex:1 1 45%;">📊 Bilan</a>
+      <a href="challenges.html" class="btn btn-secondary" style="width:auto; flex:1 1 45%;">🎯 Défis</a>
+      <a href="about.html" class="btn btn-secondary" style="width:auto; flex:1 1 45%;">ℹ️ À propos</a>
     </div>
   </div>
 </div>
@@ -77,19 +97,51 @@
 <script src="js/storage.js"></script>
 <script src="js/exercises.js"></script>
 <script src="js/workouts.js"></script>
+<script src="js/challenges.js"></script>
 <script src="js/timer.js"></script>
 <script src="js/app.js"></script>
 <script>
+  (async function showBackupReminder() {
+    const sessions = getSessionLog().length;
+    if (!sessions) return;
+    const persisted = await ensurePersistentStorage();
+    const atRisk = !isStandalone() && !persisted;
+    if (!atRisk && !shouldRemindBackup()) return;
+    const days = daysSinceBackup();
+    const card = document.getElementById('backup-card');
+    document.getElementById('backup-text').textContent = atRisk
+      ? `Tes données ne sont stockées que dans ce navigateur, qui peut les effacer (par exemple Safari après 7 jours sans visite). Installe l'application sur ton écran d'accueil et garde une sauvegarde. ${days === null ? 'Aucune sauvegarde pour l\'instant.' : `Dernière sauvegarde : il y a ${days} jour${days > 1 ? 's' : ''}.`}`
+      : `${days === null ? 'Tu n\'as encore jamais sauvegardé tes données.' : `Dernière sauvegarde : il y a ${days} jours.`} Un export ou un code de transfert protège ta progression si tu changes d'appareil.`;
+    card.style.display = 'block';
+    document.getElementById('backup-snooze').addEventListener('click', () => {
+      snoozeBackupReminder(3);
+      card.style.display = 'none';
+    });
+  })();
+
+  finalizeChallenges();
   const profile = getProfile();
   const progress = getProgramProgress();
   const today = getTodayWorkout(profile);
 
   document.getElementById('greeting').textContent = `Bonjour ${profile.name} 👋`;
-  document.getElementById('week-badge').textContent = `Semaine ${progress.week}/${progress.totalWeeks}`;
+  document.getElementById('week-badge').textContent = `Semaine ${progress.week}/${progress.totalWeeks}` + (progress.cycle > 1 ? ` · Cycle ${progress.cycle}` : '');
   document.getElementById('motivation-text').textContent = getMotivationalMessage(progress.dayNumber);
   document.getElementById('hero-progress').style.width = progress.percent + '%';
   document.getElementById('stat-sessions').textContent = `${progress.sessionsCompleted}/${progress.totalProgramSessions}`;
   document.getElementById('stat-calories').textContent = progress.totalCalories;
+
+  if (progress.finished) {
+    const card = document.getElementById('cycle-card');
+    card.style.display = 'block';
+    card.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-next]');
+      if (!btn) return;
+      if (!confirm('Démarrer un nouveau cycle de 12 semaines à partir d’aujourd’hui ?')) return;
+      startNextCycle(btn.dataset.next);
+      location.reload();
+    });
+  }
 
   const streak = getStreak();
   if (streak > 0) {
@@ -125,6 +177,7 @@
     todayCta.textContent = isPaused ? '⏸️ Reprendre la séance en pause' : "Commencer l'entraînement";
   } else {
     todayTitle.textContent = 'Jour de repos 😌';
+    document.getElementById('recovery-link').style.display = 'flex';
     todaySubtitle.textContent = `Prochaine séance : ${today.title}. Profite-en pour récupérer et t'hydrater.`;
     todayCta.textContent = isPaused ? '⏸️ Reprendre la séance en pause' : 'Faire une séance bonus quand même';
     todayCta.className = 'btn btn-secondary';
