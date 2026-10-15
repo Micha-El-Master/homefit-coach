@@ -6,29 +6,78 @@
 <title>Réglages — HomeFit Coach</title>
 <link rel="manifest" href="manifest.json" />
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-<meta name="theme-color" content="#ff5a36" />
+<meta name="theme-color" content="#d4361a" />
 <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
-<div class="app-shell">
+<div class="app-shell" role="main">
   <a href="dashboard.html" class="back-link">← Retour</a>
   <h1 style="margin-top:0;">⚙️ Réglages</h1>
 
   <div class="card">
-    <h3>Profil</h3>
-    <p style="font-size:14px; margin:0 0 4px;" id="profile-name"></p>
-    <p style="font-size:13px; color:var(--text-muted); margin:0;" id="profile-meta"></p>
+    <h3>Mon programme</h3>
+    <p style="font-size:14px; margin:0 0 10px;" id="profile-name"></p>
+    <div class="settings-row">
+      <div>
+        <label class="row-label" for="goal-select">Objectif</label>
+        <div class="row-desc">Adapte les séances et la nutrition</div>
+      </div>
+      <select class="form-select" id="goal-select" style="width:150px;">
+        <option value="muscle">Prendre du muscle</option>
+        <option value="perte">Perdre du poids</option>
+        <option value="forme">Améliorer ma forme</option>
+        <option value="discipline">Créer une habitude</option>
+      </select>
+    </div>
+    <div class="settings-row">
+      <div>
+        <label class="row-label" for="level-select">Niveau</label>
+        <div class="row-desc">Ajuste les répétitions</div>
+      </div>
+      <select class="form-select" id="level-select" style="width:150px;">
+        <option value="debutant">Débutant</option>
+        <option value="intermediaire">Intermédiaire</option>
+        <option value="avance">Avancé</option>
+      </select>
+    </div>
+    <fieldset style="border:none; padding:12px 0 0; margin:0;">
+      <legend class="row-label" style="padding:0;">Mon matériel</legend>
+      <div class="row-desc" style="margin-bottom:8px;">Les exercices qui demandent du matériel que tu n'as pas sont remplacés automatiquement.</div>
+      <div id="equipment-list"></div>
+    </fieldset>
   </div>
 
   <div class="card">
-    <h3>Apparence</h3>
+    <h3>Apparence et accessibilité</h3>
     <div class="settings-row">
       <div>
-        <div class="row-label">Thème sombre</div>
-        <div class="row-desc">Bascule entre thème clair et sombre</div>
+        <label class="row-label" for="theme-select">Thème</label>
+        <div class="row-desc">« Automatique » suit le réglage de ton téléphone</div>
+      </div>
+      <select class="form-select" id="theme-select" style="width:130px;">
+        <option value="auto">Automatique</option>
+        <option value="light">Clair</option>
+        <option value="dark">Sombre</option>
+      </select>
+    </div>
+    <div class="settings-row">
+      <div>
+        <label class="row-label" for="font-scale">Taille du texte</label>
+        <div class="row-desc">Agrandit toute l'application</div>
+      </div>
+      <select class="form-select" id="font-scale" style="width:130px;">
+        <option value="1">Normale</option>
+        <option value="1.15">Grande</option>
+        <option value="1.3">Très grande</option>
+      </select>
+    </div>
+    <div class="settings-row">
+      <div>
+        <div class="row-label" id="motion-label">Réduire les animations</div>
+        <div class="row-desc">Les deux positions d'un exercice s'affichent côte à côte</div>
       </div>
       <label class="switch">
-        <input type="checkbox" id="theme-switch" />
+        <input type="checkbox" id="motion-switch" aria-labelledby="motion-label" />
         <span class="slider"></span>
       </label>
     </div>
@@ -48,18 +97,18 @@
         <div class="row-label">Repos entre les séries</div>
         <div class="row-desc">Durée du minuteur de repos</div>
       </div>
-      <select class="form-select" id="rest-seconds" style="width:90px;">
+      <select class="form-select" id="rest-seconds" aria-label="Durée du repos entre les séries" style="width:90px;">
         <option value="30">30 s</option><option value="45">45 s</option>
         <option value="60">60 s</option><option value="90">90 s</option>
       </select>
     </div>
     <div class="settings-row">
       <div>
-        <div class="row-label">Coach vocal</div>
+        <div class="row-label" id="voice-label">Coach vocal</div>
         <div class="row-desc">Annonce les exercices et les repos à voix haute</div>
       </div>
       <label class="switch">
-        <input type="checkbox" id="voice-switch" />
+        <input type="checkbox" id="voice-switch" aria-labelledby="voice-label" />
         <span class="slider"></span>
       </label>
     </div>
@@ -69,11 +118,11 @@
     <h3>Rappel quotidien</h3>
     <div class="settings-row">
       <div>
-        <div class="row-label">Activer les rappels</div>
+        <div class="row-label" id="reminder-label">Activer les rappels</div>
         <div class="row-desc">Une notification si tu n'as pas encore fait ta séance</div>
       </div>
       <label class="switch">
-        <input type="checkbox" id="reminder-switch" />
+        <input type="checkbox" id="reminder-switch" aria-labelledby="reminder-label" />
         <span class="slider"></span>
       </label>
     </div>
@@ -81,39 +130,42 @@
       <div class="row-label">Heure du rappel</div>
       <input type="time" class="form-input" id="reminder-time" style="width:120px;" />
     </div>
+    <button class="btn btn-secondary" id="ics-btn" style="margin-top:12px; font-size:14px; padding:12px;">📅 Ajouter mes séances à mon agenda</button>
+    <p style="font-size:12px; color:var(--text-muted); margin:8px 0 0;">Crée un événement hebdomadaire sur tes jours d'entraînement, à l'heure du rappel, pour de vrais rappels même app fermée. Les jours de rattrapage ne sont pas inclus.</p>
     <p style="font-size:12px; color:var(--text-muted); margin:8px 0 0;" id="reminder-note">Fonctionne uniquement lorsque l'application est ouverte dans le navigateur (pas de notifications en arrière-plan sans serveur).</p>
   </div>
 
   <div class="card">
     <h3>Mes données</h3>
-    <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">Toutes tes données restent stockées localement dans ce navigateur. Exporte-les régulièrement pour ne rien perdre.</p>
-    <button class="btn btn-secondary" id="export-btn" style="margin-bottom:10px;">⬇️ Exporter mes données</button>
-    <label class="btn btn-outline" for="import-input" style="display:flex; cursor:pointer;">⬆️ Importer des données</label>
+    <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">Tes données restent stockées dans ce navigateur, sur cet appareil. Pour les retrouver sur un autre appareil, utilise le code de transfert ou un fichier.</p>
+
+    <button class="btn btn-secondary" id="code-copy-btn" style="margin-bottom:10px;">📋 Copier mon code de transfert</button>
+    <label class="row-label" for="code-input" style="display:block; margin-top:6px;">Coller un code reçu d'un autre appareil</label>
+    <textarea class="form-input" id="code-input" rows="3" placeholder="HFC1:…" style="margin:6px 0 10px; font-family:monospace; font-size:12px;"></textarea>
+    <button class="btn btn-outline" id="code-import-btn" style="margin-bottom:16px;">⬇️ Importer ce code</button>
+
+    <button class="btn btn-secondary" id="export-btn" style="margin-bottom:10px;">💾 Exporter un fichier</button>
+    <button class="btn btn-secondary" id="share-btn" style="margin-bottom:10px; display:none;">📤 Partager le fichier (AirDrop, messages…)</button>
+    <label class="btn btn-outline" for="import-input" style="display:flex; cursor:pointer;">📂 Importer un fichier</label>
     <input type="file" id="import-input" accept="application/json" style="display:none;" />
-    <p id="import-status" style="font-size:13px; margin:10px 0 0; display:none;"></p>
+    <p id="import-status" role="status" style="font-size:13px; margin:10px 0 0; display:none;"></p>
+    <p style="font-size:12px; color:var(--text-muted); margin:10px 0 0;">⚠️ Importer remplace toutes les données de cet appareil.</p>
   </div>
 </div>
 
-<nav class="bottom-nav">
-  <div class="nav-inner">
-    <a href="dashboard.html" data-nav-link><span class="nav-icon">🏠</span>Accueil</a>
-    <a href="workout.html" data-nav-link><span class="nav-icon">🏋️</span>Séance</a>
-    <a href="nutrition.html" data-nav-link><span class="nav-icon">🥗</span>Nutrition</a>
-    <a href="kegel.html" data-nav-link><span class="nav-icon">🧘</span>Kegel</a>
-    <a href="progress.html" data-nav-link><span class="nav-icon">📈</span>Progrès</a>
-  </div>
-</nav>
+<nav class="bottom-nav" id="bottom-nav" aria-label="Navigation principale"></nav>
 
 <script src="js/storage.js"></script>
+<script src="js/exercises.js"></script>
 <script src="js/timer.js"></script>
 <script src="js/app.js"></script>
 <script>
   const profile = getProfile();
-  document.getElementById('profile-name').textContent = profile.name;
-  document.getElementById('profile-meta').textContent = `${goalLabel(profile.goal)} · Niveau ${levelLabel(profile.level).toLowerCase()}`;
 
   const settings = getSettings();
-  const themeSwitch = document.getElementById('theme-switch');
+  const themeSelect = document.getElementById('theme-select');
+  const fontScale = document.getElementById('font-scale');
+  const motionSwitch = document.getElementById('motion-switch');
   const reminderSwitch = document.getElementById('reminder-switch');
   const reminderTimeRow = document.getElementById('reminder-time-row');
   const reminderTime = document.getElementById('reminder-time');
@@ -158,13 +210,24 @@
     if (voiceSwitch.checked) speak('Coach vocal activé');
   });
 
-  themeSwitch.checked = settings.theme === 'dark';
+  themeSelect.value = settings.theme;
+  fontScale.value = String(settings.fontScale);
+  motionSwitch.checked = settings.reduceMotion;
   reminderSwitch.checked = settings.reminderEnabled;
   reminderTime.value = settings.reminderTime;
   reminderTimeRow.style.display = settings.reminderEnabled ? 'flex' : 'none';
 
-  themeSwitch.addEventListener('change', () => {
-    toggleTheme();
+  themeSelect.addEventListener('change', () => {
+    saveSettings({ ...getSettings(), theme: themeSelect.value });
+    applyTheme();
+  });
+  fontScale.addEventListener('change', () => {
+    saveSettings({ ...getSettings(), fontScale: Number(fontScale.value) });
+    applyTheme();
+  });
+  motionSwitch.addEventListener('change', () => {
+    saveSettings({ ...getSettings(), reduceMotion: motionSwitch.checked });
+    applyTheme();
   });
 
   reminderSwitch.addEventListener('change', async () => {
@@ -188,7 +251,86 @@
     saveSettings(s);
   });
 
+  const profile0 = getProfile();
+  document.getElementById('profile-name').textContent = profile0.name;
+  const goalSelect = document.getElementById('goal-select');
+  const levelSelect = document.getElementById('level-select');
+  goalSelect.value = profile0.goal;
+  levelSelect.value = profile0.level;
+  goalSelect.addEventListener('change', () => saveProfile({ ...getProfile(), goal: goalSelect.value }));
+  levelSelect.addEventListener('change', () => saveProfile({ ...getProfile(), level: levelSelect.value }));
+
+  function renderEquipment() {
+    const owned = getSettings().equipment;
+    document.getElementById('equipment-list').innerHTML = Object.entries(EQUIPMENT)
+      .map(
+        ([key, e]) => `<label class="meal-card" style="cursor:pointer; align-items:center;">
+          <input type="checkbox" data-eq="${key}" ${owned.includes(key) ? 'checked' : ''} />
+          <span>${e.icon} ${e.label}</span>
+        </label>`
+      )
+      .join('');
+  }
+  document.getElementById('equipment-list').addEventListener('change', (e) => {
+    const box = e.target.closest('[data-eq]');
+    if (!box) return;
+    const owned = new Set(getSettings().equipment);
+    if (box.checked) owned.add(box.dataset.eq);
+    else owned.delete(box.dataset.eq);
+    saveSettings({ ...getSettings(), equipment: [...owned] });
+  });
+  renderEquipment();
+
+  document.getElementById('ics-btn').addEventListener('click', downloadICS);
+
+  const status = document.getElementById('import-status');
+  function showStatus(message, ok) {
+    status.style.display = 'block';
+    status.style.color = ok ? 'var(--accent)' : 'var(--danger)';
+    status.textContent = message;
+  }
+  function afterImport() {
+    showStatus('✔ Données importées. Rechargement…', true);
+    setTimeout(() => location.reload(), 900);
+  }
+
   document.getElementById('export-btn').addEventListener('click', exportData);
+
+  if (navigator.canShare && navigator.canShare({ files: [new File(['{}'], 'x.json', { type: 'application/json' })] })) {
+    const shareBtn = document.getElementById('share-btn');
+    shareBtn.style.display = 'flex';
+    shareBtn.addEventListener('click', () => shareDataFile().catch(() => {}));
+  }
+
+  document.getElementById('code-copy-btn').addEventListener('click', async () => {
+    let code = '';
+    try {
+      code = await buildTransferCode();
+      await navigator.clipboard.writeText(code);
+      showStatus(`✔ Code copié (${code.length} caractères). Colle-le dans un message, puis dans Réglages sur l'autre appareil.`, true);
+    } catch (err) {
+      // Presse-papiers refusé : on affiche le code, sélectionné, pour le copier à la main.
+      const box = document.getElementById('code-input');
+      box.value = code;
+      box.focus();
+      box.select();
+      showStatus(code ? '⚠️ Copie automatique refusée : le code est affiché ci-dessous, copie-le à la main (Ctrl/Cmd + C).' : '❌ Impossible de générer le code.', !!code);
+    }
+  });
+
+  document.getElementById('code-import-btn').addEventListener('click', async () => {
+    const code = document.getElementById('code-input').value;
+    if (!code.trim()) return showStatus('❌ Colle d’abord un code.', false);
+    try {
+      const json = await readTransferCode(code);
+      validateImportData(JSON.parse(json));
+      if (!confirm('Remplacer toutes les données de cet appareil par celles du code ?')) return;
+      importData(json);
+      afterImport();
+    } catch (err) {
+      showStatus('❌ ' + (err.message || 'Code invalide'), false);
+    }
+  });
 
   document.getElementById('import-input').addEventListener('change', (e) => {
     const file = e.target.files[0];
@@ -196,16 +338,12 @@
     const reader = new FileReader();
     reader.onload = () => {
       try {
+        validateImportData(JSON.parse(reader.result));
+        if (!confirm('Remplacer toutes les données de cet appareil par celles du fichier ?')) return;
         importData(reader.result);
-        const status = document.getElementById('import-status');
-        status.style.display = 'block';
-        status.style.color = 'var(--accent)';
-        status.textContent = '✔ Données importées avec succès. Recharge les autres pages pour voir les changements.';
+        afterImport();
       } catch (err) {
-        const status = document.getElementById('import-status');
-        status.style.display = 'block';
-        status.style.color = 'var(--danger)';
-        status.textContent = '❌ Fichier invalide.';
+        showStatus('❌ Fichier invalide.', false);
       }
     };
     reader.readAsText(file);

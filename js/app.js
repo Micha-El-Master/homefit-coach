@@ -6,16 +6,48 @@ function guardProfile() {
   }
 }
 
+const NAV_ITEMS = [
+  { href: 'dashboard.html', icon: '🏠', label: 'Accueil' },
+  { href: 'workout.html', icon: '🏋️', label: 'Séance' },
+  { href: 'nutrition.html', icon: '🥗', label: 'Nutrition' },
+  { href: 'kegel.html', icon: '🧘', label: 'Kegel' },
+  { href: 'progress.html', icon: '📈', label: 'Progrès' },
+];
+
+function renderBottomNav() {
+  const nav = document.getElementById('bottom-nav');
+  if (!nav) return;
+  nav.innerHTML = `<div class="nav-inner">${NAV_ITEMS.map(
+    (i) => `<a href="${i.href}" data-nav-link><span class="nav-icon" aria-hidden="true">${i.icon}</span>${i.label}</a>`
+  ).join('')}</div>`;
+}
+
+function resolveTheme(setting) {
+  if (setting === 'dark' || setting === 'light') return setting;
+  return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
 function applyTheme() {
   const settings = getSettings();
-  document.documentElement.setAttribute('data-theme', settings.theme);
+  const root = document.documentElement;
+  root.setAttribute('data-theme', resolveTheme(settings.theme));
+  root.style.zoom = settings.fontScale && settings.fontScale !== 1 ? String(settings.fontScale) : '';
+  if (settings.reduceMotion) root.setAttribute('data-reduce-motion', '');
+  else root.removeAttribute('data-reduce-motion');
 }
 
 function toggleTheme() {
   const settings = getSettings();
-  settings.theme = settings.theme === 'dark' ? 'light' : 'dark';
+  settings.theme = resolveTheme(settings.theme) === 'dark' ? 'light' : 'dark';
   saveSettings(settings);
   applyTheme();
+}
+
+// En mode « automatique », on suit le réglage clair/sombre du système en direct.
+if (window.matchMedia) {
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    if (getSettings().theme === 'auto') applyTheme();
+  });
 }
 
 function initThemeToggle() {
@@ -29,6 +61,8 @@ function highlightNav() {
   document.querySelectorAll('[data-nav-link]').forEach((link) => {
     const target = link.getAttribute('href');
     link.classList.toggle('active', target === page);
+    if (target === page) link.setAttribute('aria-current', 'page');
+    else link.removeAttribute('aria-current');
   });
 }
 
@@ -79,8 +113,11 @@ function goalLabel(goal) {
   }[goal] || goal;
 }
 
+applyTheme();
+
 document.addEventListener('DOMContentLoaded', () => {
   applyTheme();
+  renderBottomNav();
   guardProfile();
   highlightNav();
   initThemeToggle();

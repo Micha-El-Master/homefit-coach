@@ -6,18 +6,18 @@
 <title>Séance — HomeFit Coach</title>
 <link rel="manifest" href="manifest.json" />
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-<meta name="theme-color" content="#ff5a36" />
+<meta name="theme-color" content="#d4361a" />
 <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
-<div class="app-shell">
+<div class="app-shell" role="main">
 
   <div id="view-list">
     <div class="topbar">
       <h1 id="list-title">Aujourd'hui</h1>
       <div class="topbar-actions">
-        <button class="icon-btn" data-theme-toggle title="Changer le thème">🌓</button>
-        <a href="coach.html" class="icon-btn" title="Coach">🧠</a>
+        <button class="icon-btn" aria-label="Changer le thème" data-theme-toggle title="Changer le thème">🌓</button>
+        <a href="coach.html" class="icon-btn" aria-label="Coach" title="Coach">🧠</a>
       </div>
     </div>
     <p id="list-subtitle" style="color:var(--text-muted); margin-top:-10px; font-size:14px;"></p>
@@ -82,7 +82,7 @@
 
   <div id="view-work" style="display:none;">
     <div class="topbar">
-      <button class="icon-btn" id="work-close" title="Mettre en pause">✕</button>
+      <button class="icon-btn" aria-label="Mettre en pause" id="work-close" title="Mettre en pause">✕</button>
       <h1>Séance en cours</h1>
       <span style="width:40px;"></span>
     </div>
@@ -95,6 +95,14 @@
     <div class="center-col">
       <div id="work-illustration"></div>
       <div class="timer-circle" id="work-timer" style="display:none;">00:30</div>
+      <div class="stepper" id="reps-stepper" style="display:none;">
+        <span class="stepper-label" id="reps-label">Répétitions faites</span>
+        <div class="stepper-controls">
+          <button type="button" id="reps-minus" aria-label="Une répétition de moins">−</button>
+          <output id="reps-value" aria-live="polite" aria-labelledby="reps-label">12</output>
+          <button type="button" id="reps-plus" aria-label="Une répétition de plus">+</button>
+        </div>
+      </div>
       <button class="btn btn-primary" id="work-done-btn" style="max-width:280px;">✔ Série terminée</button>
       <div id="work-adjust" style="display:flex; gap:8px; margin-top:12px;">
         <button class="btn btn-secondary" id="adjust-harder" style="padding:8px 14px; font-size:13px; width:auto;">😮‍💨 Trop dur</button>
@@ -145,17 +153,9 @@
   </div>
 </div>
 
-<nav class="bottom-nav">
-  <div class="nav-inner">
-    <a href="dashboard.html" data-nav-link><span class="nav-icon">🏠</span>Accueil</a>
-    <a href="workout.html" data-nav-link><span class="nav-icon">🏋️</span>Séance</a>
-    <a href="nutrition.html" data-nav-link><span class="nav-icon">🥗</span>Nutrition</a>
-    <a href="kegel.html" data-nav-link><span class="nav-icon">🧘</span>Kegel</a>
-    <a href="progress.html" data-nav-link><span class="nav-icon">📈</span>Progrès</a>
-  </div>
-</nav>
+<nav class="bottom-nav" id="bottom-nav" aria-label="Navigation principale"></nav>
 
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="js/storage.js"></script>
 <script src="js/exercises.js"></script>
@@ -226,6 +226,8 @@
     const todayPlan = getWeekPlan().days.find((d) => d.isToday);
     if (todayPlan.rescue && !todayPlan.done) notes.push('🔁 <strong>Jour de rattrapage</strong> — cette séance garde ta série.');
     else if (todayPlan.type === 'rest' && !todayPlan.done) notes.push("😌 Aujourd'hui est un jour de repos prévu : tu peux t'entraîner quand même, la séance comptera pour ta semaine.");
+    if (today.goalNote) notes.push(`🎯 ${today.goalNote}`);
+    if (today.equipmentNote) notes.push(`🧰 ${today.equipmentNote}`);
     if (today.phase.label) notes.push(`<strong>Semaine ${today.week}/${TOTAL_WEEKS}</strong> — ${today.phase.label}`);
     if (today.feeling === 'dur') notes.push('Tes dernières séances étaient dures : celle-ci est un peu allégée.');
     if (today.feeling === 'facile') notes.push('Tes dernières séances étaient faciles : celle-ci est un peu plus intense.');
@@ -334,6 +336,8 @@
   let sessionStart = null;
   let activeTimer = null;
   const exerciseTally = {};
+  const setLog = {};
+  let repsDone = 0;
 
   function buildQueue() {
     const steps = [];
@@ -363,7 +367,11 @@
     sessionStart = Date.now();
     queue = buildQueue();
     queueIndex = 0;
-    today.exercises.forEach((ex) => (exerciseTally[ex.id] = 0));
+    Object.keys(setLog).forEach((k) => delete setLog[k]);
+    today.exercises.forEach((ex) => {
+      exerciseTally[ex.id] = 0;
+      setLog[ex.id] = [];
+    });
     acquireWakeLock();
     runStep();
   }
@@ -377,6 +385,7 @@
     queue = buildQueue();
     queueIndex = Math.min(saved.queueIndex, queue.length - 1);
     Object.assign(exerciseTally, saved.tally);
+    Object.assign(setLog, saved.setLog || {});
     sessionStart = Date.now() - saved.elapsedMs;
     acquireWakeLock();
     runStep();
@@ -393,6 +402,7 @@
       options,
       queueIndex,
       tally: exerciseTally,
+      setLog,
       elapsedMs: Date.now() - sessionStart,
     });
   }
@@ -462,6 +472,7 @@
       targetEl.textContent = `Maintiens ${ex.holdSeconds} secondes`;
       timerEl.style.display = 'flex';
       doneBtn.style.display = 'none';
+      document.getElementById('reps-stepper').style.display = 'none';
       timerEl.textContent = formatTime(ex.holdSeconds);
       if (!silent) speak(`${data.name}. ${ex.holdSeconds} secondes.`);
       activeTimer = createCountdown(ex.holdSeconds, {
@@ -470,7 +481,10 @@
           timerEl.classList.toggle('urgent', remaining <= 3 && remaining > 0);
         },
         onComplete: () => {
-          if (!step.phase) exerciseTally[ex.id] += ex.holdSeconds;
+          if (!step.phase) {
+            exerciseTally[ex.id] += ex.holdSeconds;
+            (setLog[ex.id] = setLog[ex.id] || []).push(ex.holdSeconds);
+          }
           queueIndex++;
           runStep();
         },
@@ -482,8 +496,24 @@
       timerEl.style.display = 'none';
       doneBtn.style.display = 'flex';
       if (!silent) speak(`${data.name}. Série ${step.setIndex} sur ${ex.sets}. ${reps}.`);
+
+      // Répétitions réellement faites : par défaut la cible, ajustable avant de valider.
+      repsDone = ex.reps;
+      const valueEl = document.getElementById('reps-value');
+      valueEl.textContent = repsDone;
+      document.getElementById('reps-label').textContent = ex.perLeg ? 'Répétitions faites (par jambe)' : 'Répétitions faites';
+      document.getElementById('reps-stepper').style.display = 'flex';
+      document.getElementById('reps-minus').onclick = () => {
+        repsDone = Math.max(0, repsDone - 1);
+        valueEl.textContent = repsDone;
+      };
+      document.getElementById('reps-plus').onclick = () => {
+        repsDone += 1;
+        valueEl.textContent = repsDone;
+      };
       doneBtn.onclick = () => {
-        exerciseTally[ex.id] += ex.reps * (ex.perLeg ? 2 : 1);
+        exerciseTally[ex.id] += repsDone * (ex.perLeg ? 2 : 1);
+        (setLog[ex.id] = setLog[ex.id] || []).push(repsDone);
         queueIndex++;
         runStep();
       };
@@ -532,6 +562,7 @@
       id: ex.id,
       name: EXERCISES[ex.id].name,
       totalReps: exerciseTally[ex.id] || 0,
+      sets: setLog[ex.id] || [],
     }));
 
     const badgesBefore = getBadgeStates().filter((b) => b.unlocked).map((b) => b.id);
@@ -592,7 +623,8 @@
       const li = document.createElement('li');
       li.className = 'history-item';
       const unit = today.exercises.find((e) => e.id === ex.id).holdSeconds ? 's' : 'reps';
-      li.innerHTML = `<span>${ex.name}</span><span>${ex.totalReps} ${unit}</span>`;
+      const detail = ex.sets.length ? `<small style="display:block; color:var(--text-muted);">${ex.sets.join(' · ')}</small>` : '';
+      li.innerHTML = `<span>${ex.name}${detail}</span><span>${ex.totalReps} ${unit}</span>`;
       list.appendChild(li);
     });
   }

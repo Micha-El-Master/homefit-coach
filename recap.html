@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Bilan de la semaine — HomeFit Coach</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<meta name="theme-color" content="#d4361a" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="app-shell" role="main">
+  <div class="topbar">
+    <h1>📊 Bilan</h1>
+    <div class="topbar-actions">
+      <a href="progress.html" class="icon-btn" aria-label="Retour aux progrès" title="Retour aux progrès">📈</a>
+    </div>
+  </div>
+
+  <div class="calendar-header">
+    <button id="week-prev" aria-label="Semaine précédente">‹</button>
+    <span class="month-label" id="week-label" aria-live="polite"></span>
+    <button id="week-next" aria-label="Semaine suivante">›</button>
+  </div>
+
+  <div class="hero-card">
+    <span class="badge" id="recap-status"></span>
+    <p class="greeting" id="recap-sessions" style="margin:6px 0 0; font-size:34px;"></p>
+    <p class="subtext" style="margin:0;" id="recap-sub"></p>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat-tile"><div class="value" id="r-minutes">0</div><div class="label">Minutes</div></div>
+    <div class="stat-tile"><div class="value" id="r-calories">0</div><div class="label">Kcal estimées</div></div>
+    <div class="stat-tile"><div class="value" id="r-reps">0</div><div class="label">Répétitions</div></div>
+    <div class="stat-tile"><div class="value" id="r-streak">0</div><div class="label">Semaines de suite</div></div>
+  </div>
+
+  <div class="card">
+    <h3>Ressenti</h3>
+    <p id="r-feelings" style="font-size:14px; margin:0;"></p>
+  </div>
+
+  <div class="card" id="top-card">
+    <h3>Tes exercices les plus travaillés</h3>
+    <div id="r-top"></div>
+  </div>
+
+  <div class="card" style="background:var(--primary-light);">
+    <h3>💡 Conseil pour la suite</h3>
+    <p id="r-tip" style="font-size:14px; line-height:1.6; margin:0;"></p>
+  </div>
+</div>
+
+<nav class="bottom-nav" id="bottom-nav" aria-label="Navigation principale"></nav>
+
+<script src="js/storage.js"></script>
+<script src="js/exercises.js"></script>
+<script src="js/recap.js"></script>
+<script src="js/app.js"></script>
+<script>
+  const currentMonday = mondayOf(new Date());
+  const profile = getProfile();
+  const firstMonday = mondayOf(new Date(profile.startDate + 'T00:00:00'));
+  let monday = new Date(currentMonday);
+
+  const fmt = (d) => d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+
+  function render() {
+    const recap = getWeekRecap(monday);
+    const isCurrent = monday.getTime() === currentMonday.getTime();
+    const sunday = new Date(monday);
+    sunday.setDate(sunday.getDate() + 6);
+    document.getElementById('week-label').textContent = `${fmt(monday)} – ${fmt(sunday)}${isCurrent ? ' (en cours)' : ''}`;
+    document.getElementById('week-prev').disabled = monday <= firstMonday;
+    document.getElementById('week-next').disabled = isCurrent;
+
+    document.getElementById('recap-sessions').textContent = `${recap.count}/${recap.target} séances`;
+    document.getElementById('recap-status').textContent =
+      recap.count >= recap.target ? '✅ Objectif atteint' : isCurrent ? '⏳ En cours' : '❌ Objectif manqué';
+    document.getElementById('recap-sub').textContent = recap.holdSeconds ? `+ ${recap.holdSeconds} s de gainage` : '';
+
+    document.getElementById('r-minutes').textContent = recap.minutes;
+    document.getElementById('r-calories').textContent = recap.calories;
+    document.getElementById('r-reps').textContent = recap.totalReps;
+    document.getElementById('r-streak').textContent = getStreak();
+
+    const f = recap.feelings;
+    document.getElementById('r-feelings').textContent =
+      f.dur + f.bien + f.facile
+        ? `😅 ${f.dur} dure${f.dur > 1 ? 's' : ''} · 👍 ${f.bien} bien · 😎 ${f.facile} facile${f.facile > 1 ? 's' : ''}`
+        : 'Aucun ressenti noté cette semaine. Tu peux en donner un à la fin de chaque séance.';
+
+    document.getElementById('top-card').style.display = recap.top.length ? 'block' : 'none';
+    document.getElementById('r-top').innerHTML = recap.top
+      .map((t) => `<div class="history-item"><span>${t.name}</span><span>${t.total} ${t.unit}</span></div>`)
+      .join('');
+    document.getElementById('r-tip').textContent = getWeekTip(recap, isCurrent);
+  }
+
+  document.getElementById('week-prev').addEventListener('click', () => {
+    monday.setDate(monday.getDate() - 7);
+    render();
+  });
+  document.getElementById('week-next').addEventListener('click', () => {
+    monday.setDate(monday.getDate() + 7);
+    render();
+  });
+  render();
+</script>
+</body>
+</html>

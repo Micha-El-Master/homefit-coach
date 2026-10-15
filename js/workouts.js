@@ -122,18 +122,102 @@ function scaleExercise(exercise, level, week = 1, feeling = null) {
   return scaled;
 }
 
+// Variantes du programme selon l'objectif : les 4 séances gardent leur nom, seul le contenu change.
+const FINISHERS = {
+  'Haut du corps': { id: 'mountain-climbers', sets: 3, holdSeconds: 30 },
+  'Jambes + Abdos': { id: 'squat-jump', sets: 3, reps: 12 },
+  'Dos + Biceps': { id: 'star-jump', sets: 3, reps: 10 },
+  'Full Body + Cardio': { id: 'jumping-jacks', sets: 3, holdSeconds: 40 },
+};
+
+const GOAL_NOTES = {
+  muscle: 'Programme prise de muscle : +1 série sur les deux premiers exercices de chaque séance.',
+  perte: 'Programme perte de poids : un finisher cardio est ajouté à la fin de chaque séance.',
+  forme: null,
+  discipline: 'Programme habitude : séances raccourcies (un exercice de moins) pour installer la routine.',
+};
+
+function applyGoalVariant(session, goal) {
+  const base = session.exercises.map((ex) => ({ ...ex }));
+  if (goal === 'muscle') return base.map((ex, i) => (i < 2 ? { ...ex, sets: ex.sets + 1 } : ex));
+  if (goal === 'perte') return [...base, { ...FINISHERS[session.title] }];
+  if (goal === 'discipline') return base.slice(0, -1);
+  return base;
+}
+
+// Exercices de repli (au poids du corps) par catégorie, quand le matériel manque.
+const FALLBACKS_BY_CATEGORY = {
+  'Haut du corps': ['pompes'],
+  Jambes: ['squat', 'fentes', 'pont-fessier'],
+  Abdos: ['crunch', 'planche'],
+  Dos: ['superman', 'gainage-dorsal'],
+  Cardio: ['mountain-climbers', 'squat-jump', 'star-jump', 'jumping-jacks', 'planche'],
+};
+
+function isFeasible(id, equipment) {
+  return (EXERCISES[id].requires || []).every((r) => equipment.includes(r));
+}
+
+// Remplace chaque exercice infaisable par une alternative faisable (sinon par un repli de la catégorie),
+// et le retire s'il n'existe rien de nouveau à proposer dans la séance.
+function applyEquipment(exercises, equipment) {
+  const out = [];
+  let replaced = 0;
+  let dropped = 0;
+  exercises.forEach((ex) => {
+    if (isFeasible(ex.id, equipment)) {
+      out.push(ex);
+      return;
+    }
+    const data = EXERCISES[ex.id];
+    const candidates = [...(data.alternatives || []), ...(FALLBACKS_BY_CATEGORY[data.category] || [])];
+    const sub = candidates.find(
+      (c) => isFeasible(c, equipment) && !exercises.some((e) => e.id === c) && !out.some((o) => o.id === c)
+    );
+    if (!sub) {
+      dropped++;
+      return;
+    }
+    const next = { ...ex, id: sub };
+    if (EXERCISES[sub].type === 'hold' && next.reps) {
+      next.holdSeconds = 30;
+      delete next.reps;
+    } else if (EXERCISES[sub].type !== 'hold' && next.holdSeconds) {
+      next.reps = 12;
+      delete next.holdSeconds;
+    }
+    if (sub !== 'fentes') delete next.perLeg;
+    out.push(next);
+    replaced++;
+  });
+  return { exercises: out, replaced, dropped };
+}
+
 function getTodayWorkout(profile, title) {
   const day = SESSION_CYCLE.find((s) => s.title === (title || getNextSessionTitle())) || SESSION_CYCLE[0];
   const level = profile ? profile.level : 'intermediaire';
+  const goal = profile ? profile.goal : 'forme';
   const progress = getProgramProgress();
   const week = progress ? progress.week : 1;
   const feeling = getFeelingTrend();
+  const equipped = applyEquipment(applyGoalVariant(day, goal), getSettings().equipment);
+
+  let equipmentNote = null;
+  if (equipped.replaced || equipped.dropped) {
+    const parts = [];
+    if (equipped.replaced) parts.push(`${equipped.replaced} exercice${equipped.replaced > 1 ? 's' : ''} remplacé${equipped.replaced > 1 ? 's' : ''}`);
+    if (equipped.dropped) parts.push(`${equipped.dropped} retiré${equipped.dropped > 1 ? 's' : ''}`);
+    equipmentNote = `Selon ton matériel : ${parts.join(', ')}. Ajoute du matériel dans les réglages pour retrouver la séance complète.`;
+  }
+
   return {
     ...day,
     week,
     phase: getWeekPhase(week),
     feeling,
-    exercises: day.exercises.map((ex) => scaleExercise(ex, level, week, feeling)),
+    goalNote: GOAL_NOTES[goal] || null,
+    equipmentNote,
+    exercises: equipped.exercises.map((ex) => scaleExercise(ex, level, week, feeling)),
   };
 }
 

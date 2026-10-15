@@ -6,48 +6,82 @@
 <title>HomeFit Coach</title>
 <link rel="manifest" href="manifest.json" />
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-<meta name="theme-color" content="#ff5a36" />
+<meta name="theme-color" content="#d4361a" />
 <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
-<div class="app-shell">
-  <div class="center-col" style="margin-top:30px;">
-    <div style="font-size:56px;">🏋️</div>
+<div class="app-shell" role="main">
+  <div class="center-col" style="margin-top:20px;">
+    <div style="font-size:56px;" aria-hidden="true">🏋️</div>
     <h1 style="margin:8px 0 2px;">HomeFit Coach</h1>
     <p style="color:var(--text-muted); margin:0 0 24px; font-size:14px;">Ton coach à domicile, sans salle de sport.</p>
   </div>
 
-  <form id="onboarding-form">
+  <form id="onboarding-form" novalidate>
     <div class="form-group">
       <label for="name">Ton prénom</label>
-      <input class="form-input" type="text" id="name" placeholder="Jean" required />
+      <input class="form-input" type="text" id="name" placeholder="Jean" autocomplete="given-name" required />
     </div>
+
+    <fieldset class="form-group" style="border:none; padding:0; margin:0 0 16px;">
+      <legend style="font-weight:600; margin-bottom:6px; font-size:14px; padding:0;">Ton objectif</legend>
+      <div class="option-grid" id="goal-options" role="radiogroup" aria-label="Ton objectif">
+        <button type="button" class="option-card" role="radio" aria-checked="false" data-value="muscle">💪 Prendre du muscle</button>
+        <button type="button" class="option-card" role="radio" aria-checked="false" data-value="perte">🔥 Perdre du poids</button>
+        <button type="button" class="option-card" role="radio" aria-checked="false" data-value="forme">⚡ Améliorer ma forme</button>
+        <button type="button" class="option-card" role="radio" aria-checked="false" data-value="discipline">🧠 Créer une habitude</button>
+      </div>
+    </fieldset>
+
+    <fieldset class="form-group" style="border:none; padding:0; margin:0 0 16px;">
+      <legend style="font-weight:600; margin-bottom:6px; font-size:14px; padding:0;">Ton niveau</legend>
+      <div class="option-grid" id="level-options" role="radiogroup" aria-label="Ton niveau">
+        <button type="button" class="option-card" role="radio" aria-checked="false" data-value="debutant">🌱 Débutant</button>
+        <button type="button" class="option-card" role="radio" aria-checked="false" data-value="intermediaire">🚀 Intermédiaire</button>
+        <button type="button" class="option-card" role="radio" aria-checked="false" data-value="avance">🏆 Avancé</button>
+      </div>
+    </fieldset>
+
+    <fieldset class="form-group" style="border:none; padding:0; margin:0 0 16px;">
+      <legend style="font-weight:600; margin-bottom:2px; font-size:14px; padding:0;">Ton matériel</legend>
+      <p style="font-size:12px; color:var(--text-muted); margin:0 0 8px;">Sans rien cocher, l'app propose des exercices au poids du corps.</p>
+      <div id="equipment-list"></div>
+    </fieldset>
 
     <div class="form-group">
-      <label>Ton objectif</label>
-      <div class="option-grid" id="goal-options">
-        <div class="option-card" data-value="muscle">💪 Prendre du muscle</div>
-        <div class="option-card" data-value="perte">🔥 Perdre du poids</div>
-        <div class="option-card" data-value="forme">⚡ Améliorer ma forme</div>
-        <div class="option-card" data-value="discipline">🧠 Créer une habitude</div>
-      </div>
+      <div style="font-weight:600; font-size:14px;" id="days-label">Tes jours d'entraînement</div>
+      <p style="font-size:12px; color:var(--text-muted); margin:2px 0 0;">Les autres jours sont des jours de repos. Tu pourras les changer dans les réglages.</p>
+      <div class="day-picker" id="day-picker" role="group" aria-labelledby="days-label"></div>
+      <p id="day-summary" style="font-size:13px; margin:6px 0 0; font-weight:600;"></p>
     </div>
 
-    <div class="form-group">
-      <label>Ton niveau</label>
-      <div class="option-grid" id="level-options">
-        <div class="option-card" data-value="debutant">🌱 Débutant</div>
-        <div class="option-card" data-value="intermediaire">🚀 Intermédiaire</div>
-        <div class="option-card" data-value="avance">🏆 Avancé</div>
+    <details class="form-group" style="margin-bottom:16px;">
+      <summary style="cursor:pointer; font-weight:600; font-size:14px;">Calculer mes besoins nutritionnels (facultatif)</summary>
+      <div class="option-grid" style="margin:12px 0;">
+        <div class="form-group" style="margin:0;"><label for="b-weight">Poids (kg)</label><input class="form-input" type="number" id="b-weight" min="30" max="250" step="0.1" /></div>
+        <div class="form-group" style="margin:0;"><label for="b-height">Taille (cm)</label><input class="form-input" type="number" id="b-height" min="120" max="230" /></div>
+        <div class="form-group" style="margin:0;"><label for="b-age">Âge</label><input class="form-input" type="number" id="b-age" min="14" max="90" /></div>
+        <div class="form-group" style="margin:0;"><label for="b-sex">Sexe</label>
+          <select class="form-select" id="b-sex"><option value="m">Homme</option><option value="f">Femme</option></select></div>
       </div>
-    </div>
+      <div class="form-group" style="margin:0;">
+        <label for="b-activity">Activité hors séances</label>
+        <select class="form-select" id="b-activity">
+          <option value="1.4">Plutôt assis (bureau)</option>
+          <option value="1.55">Moyennement actif</option>
+          <option value="1.7">Très actif (debout, marche)</option>
+        </select>
+      </div>
+    </details>
 
+    <p id="form-error" role="alert" style="color:var(--danger); font-size:13px; font-weight:600; margin:0 0 12px; display:none;"></p>
     <button type="submit" class="btn btn-primary">Commencer mon programme</button>
   </form>
 </div>
 
 <script src="js/storage.js"></script>
-<script src="js/workouts.js"></script>
+<script src="js/exercises.js"></script>
+<script src="js/app.js"></script>
 <script>
   if (hasProfile()) {
     location.href = 'dashboard.html';
@@ -55,34 +89,102 @@
 
   let selectedGoal = null;
   let selectedLevel = null;
+  let trainingDays = getTrainingDays().slice();
+  const equipment = new Set(getSettings().equipment);
 
   function wireOptions(containerId, onSelect) {
     const container = document.getElementById(containerId);
     container.querySelectorAll('.option-card').forEach((el) => {
       el.addEventListener('click', () => {
-        container.querySelectorAll('.option-card').forEach((c) => c.classList.remove('selected'));
+        container.querySelectorAll('.option-card').forEach((c) => {
+          c.classList.remove('selected');
+          c.setAttribute('aria-checked', 'false');
+        });
         el.classList.add('selected');
+        el.setAttribute('aria-checked', 'true');
         onSelect(el.dataset.value);
       });
     });
   }
-
   wireOptions('goal-options', (v) => (selectedGoal = v));
   wireOptions('level-options', (v) => (selectedLevel = v));
+
+  document.getElementById('equipment-list').innerHTML = Object.entries(EQUIPMENT)
+    .map(
+      ([key, e]) => `<label class="meal-card" style="cursor:pointer; align-items:center;">
+        <input type="checkbox" data-eq="${key}" ${equipment.has(key) ? 'checked' : ''} />
+        <span>${e.icon} ${e.label}</span>
+      </label>`
+    )
+    .join('');
+  document.getElementById('equipment-list').addEventListener('change', (e) => {
+    const box = e.target.closest('[data-eq]');
+    if (!box) return;
+    if (box.checked) equipment.add(box.dataset.eq);
+    else equipment.delete(box.dataset.eq);
+  });
+
+  const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
+  const DAY_LABELS = { 1: 'Lun', 2: 'Mar', 3: 'Mer', 4: 'Jeu', 5: 'Ven', 6: 'Sam', 0: 'Dim' };
+  const picker = document.getElementById('day-picker');
+
+  function renderDays() {
+    picker.innerHTML = DAY_ORDER.map(
+      (d) => `<button type="button" data-day="${d}" class="${trainingDays.includes(d) ? 'active' : ''}" aria-pressed="${trainingDays.includes(d)}">${DAY_LABELS[d]}</button>`
+    ).join('');
+    const n = trainingDays.length;
+    document.getElementById('day-summary').textContent = `${n} séance${n > 1 ? 's' : ''} par semaine · ${7 - n} jour${7 - n > 1 ? 's' : ''} de repos`;
+  }
+  picker.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-day]');
+    if (!btn) return;
+    const day = Number(btn.dataset.day);
+    if (trainingDays.includes(day)) {
+      if (trainingDays.length === 1) return;
+      trainingDays = trainingDays.filter((d) => d !== day);
+    } else {
+      if (trainingDays.length === 6) return;
+      trainingDays.push(day);
+    }
+    renderDays();
+  });
+  renderDays();
+
+  function showError(message) {
+    const el = document.getElementById('form-error');
+    el.textContent = message;
+    el.style.display = 'block';
+  }
 
   document.getElementById('onboarding-form').addEventListener('submit', (e) => {
     e.preventDefault();
     const name = document.getElementById('name').value.trim();
     if (!name || !selectedGoal || !selectedLevel) {
-      alert('Merci de remplir ton prénom, ton objectif et ton niveau.');
+      showError('Merci de renseigner ton prénom, ton objectif et ton niveau.');
       return;
     }
-    saveProfile({
-      name,
-      goal: selectedGoal,
-      level: selectedLevel,
-      startDate: todayISO(),
-    });
+
+    const profile = { name, goal: selectedGoal, level: selectedLevel, startDate: todayISO() };
+
+    const weight = Number(document.getElementById('b-weight').value);
+    const height = Number(document.getElementById('b-height').value);
+    const age = Number(document.getElementById('b-age').value);
+    if (weight || height || age) {
+      if (!weight || !height || !age) {
+        showError('Pour calculer tes besoins, renseigne le poids, la taille et l’âge (ou laisse les trois vides).');
+        return;
+      }
+      profile.body = {
+        weight,
+        height,
+        age,
+        sex: document.getElementById('b-sex').value,
+        activity: Number(document.getElementById('b-activity').value),
+      };
+    }
+
+    saveProfile(profile);
+    saveSettings({ ...getSettings(), trainingDays: trainingDays.slice().sort((a, b) => a - b), equipment: [...equipment] });
     location.href = 'dashboard.html';
   });
 </script>

@@ -28,6 +28,7 @@ const EXERCISES = {
     icon: '🤸',
     pose: 'pushup',
     category: 'Haut du corps',
+    requires: ['chaise'],
     alternatives: ['pompes', 'elevations-laterales'],
     muscles: [
       { emoji: '💪', label: 'Pectoraux (haut)' },
@@ -51,6 +52,7 @@ const EXERCISES = {
     icon: '🪑',
     pose: 'dip',
     category: 'Haut du corps',
+    requires: ['chaise'],
     alternatives: ['extension-triceps', 'pompes'],
     muscles: [
       { emoji: '🔥', label: 'Triceps' },
@@ -73,6 +75,7 @@ const EXERCISES = {
     icon: '🍾',
     pose: 'standing',
     category: 'Haut du corps',
+    requires: ['charges'],
     alternatives: ['dips-chaise', 'curl-biceps'],
     muscles: [{ emoji: '🔥', label: 'Triceps' }],
     description: "Avec une bouteille remplie ou un objet lesté, cet exercice isole les triceps pour affiner l’arrière du bras.",
@@ -91,6 +94,7 @@ const EXERCISES = {
     icon: '🧴',
     pose: 'standing',
     category: 'Haut du corps',
+    requires: ['charges'],
     alternatives: ['pike-pushup', 'extension-triceps'],
     muscles: [{ emoji: '🧍', label: 'Épaules' }],
     description: "Avec deux bouteilles d’eau, cet exercice dessine les épaules en travaillant le deltoïde latéral.",
@@ -230,6 +234,7 @@ const EXERCISES = {
     icon: '🧵',
     pose: 'row',
     category: 'Dos',
+    requires: ['charges'],
     alternatives: ['tirage-elastique', 'superman'],
     muscles: [{ emoji: '💪', label: 'Dos' }, { emoji: '🔥', label: 'Biceps' }],
     description: "Penché en avant, tu tires deux charges (haltères, ou bouteilles / sacs lestés) vers le bas des côtes pour muscler le milieu du dos.",
@@ -249,6 +254,7 @@ const EXERCISES = {
     icon: '🧃',
     pose: 'standing',
     category: 'Dos',
+    requires: ['charges'],
     alternatives: ['rowing-serviette', 'tirage-elastique'],
     muscles: [{ emoji: '🔥', label: 'Biceps' }],
     description: "Avec des bouteilles d’eau comme charge, cet exercice isole les biceps.",
@@ -267,6 +273,7 @@ const EXERCISES = {
     icon: '🎗️',
     pose: 'row',
     category: 'Dos',
+    requires: ['elastique'],
     alternatives: ['rowing-serviette', 'curl-biceps'],
     muscles: [{ emoji: '💪', label: 'Haut du dos' }, { emoji: '🧍', label: 'Arrière des épaules' }],
     description: "Debout, tu écartes un élastique tendu devant toi jusqu’à la poitrine : un mouvement simple qui renforce le haut du dos et corrige la posture.",
@@ -325,7 +332,7 @@ const EXERCISES = {
     category: 'Cardio',
     alternatives: ['squat-jump', 'mountain-climbers'],
     muscles: [{ emoji: '❤️', label: 'Cardio' }, { emoji: '💪', label: 'Corps entier' }],
-    description: "Le burpee est un exercice complet et intense qui combine squat, pompe et saut.",
+    description: "Le burpee est un exercice complet et intense qui combine squat, pompe et saut. Les photos montrent les phases de base (flexion, appui au sol, planche, retour) ; la pompe et le saut final s'ajoutent pour la version intense.",
     steps: [
       'Depuis debout, descends en squat et pose les mains au sol.',
       'Envoie les pieds en arrière en position de pompe.',
@@ -568,4 +575,10 @@ const EXERCISES = {
     results: ['Dos relâché', 'Retour au calme'],
     type: 'hold',
   },
+};
+
+const EQUIPMENT = {
+  chaise: { icon: '🪑', label: 'Chaise ou banc stable' },
+  charges: { icon: '🍾', label: 'Charges (haltères, bouteilles, sacs)' },
+  elastique: { icon: '🎗️', label: 'Élastique de résistance' },
 };

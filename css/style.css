@@ -5,9 +5,10 @@
   --text: #17181c;
   --text-muted: #6b7280;
   --border: #e5e7eb;
-  --primary: #ff5a36;
-  --primary-dark: #e6491f;
+  --primary: #d4361a;
+  --primary-dark: #b82a10;
   --primary-light: #ffe4db;
+  --on-primary: #ffffff;
   --accent: #17b890;
   --danger: #ef4444;
   --radius: 16px;
@@ -24,8 +25,9 @@
   --text-muted: #9a9ba3;
   --border: #303138;
   --primary: #ff6a45;
-  --primary-dark: #ff5a36;
+  --primary-dark: #ff8a6b;
   --primary-light: #3a271f;
+  --on-primary: #1a1a1a;
   --shadow: 0 2px 14px rgba(0, 0, 0, 0.4);
 }
 
@@ -94,7 +96,7 @@ button { font-family: inherit; }
 
 .hero-card {
   background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-  color: #fff;
+  color: var(--on-primary);
   border-radius: var(--radius);
   padding: 22px;
   margin-bottom: 16px;
@@ -106,7 +108,7 @@ button { font-family: inherit; }
 
 .badge {
   display: inline-block;
-  background: rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.22);
   padding: 4px 10px;
   border-radius: 999px;
   font-size: 12px;
@@ -130,7 +132,7 @@ button { font-family: inherit; }
 }
 
 .hero-card .progress-bar { background: rgba(255,255,255,0.25); }
-.hero-card .progress-bar > span { background: #fff; }
+.hero-card .progress-bar > span { background: var(--on-primary); }
 
 .stat-grid {
   display: grid;
@@ -166,7 +168,7 @@ button { font-family: inherit; }
 }
 
 .btn:active { transform: scale(0.98); }
-.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary { background: var(--primary); color: var(--on-primary); }
 .btn-secondary { background: var(--surface-2); color: var(--text); }
 .btn-outline { background: transparent; border: 1.5px solid var(--primary); color: var(--primary); }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -219,6 +221,8 @@ button { font-family: inherit; }
 }
 
 .option-card {
+  font-family: inherit;
+  color: var(--text);
   border: 1.5px solid var(--border);
   background: var(--surface);
   border-radius: var(--radius-sm);
@@ -300,7 +304,7 @@ button { font-family: inherit; }
   height: 24px;
   border-radius: 50%;
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
   font-size: 12px;
   font-weight: 700;
   display: flex;
@@ -458,7 +462,7 @@ button { font-family: inherit; }
 .goal-select button.active {
   background: var(--primary);
   border-color: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
 }
 
 /* Illustrations */
@@ -594,7 +598,7 @@ button { font-family: inherit; }
 }
 .calendar-cell.today { border: 1.5px solid var(--primary); font-weight: 700; color: var(--text); }
 .calendar-cell.other-month { opacity: 0.3; }
-.calendar-cell.has-session { background: var(--primary); color: #fff; font-weight: 700; }
+.calendar-cell.has-session { background: var(--primary); color: var(--on-primary); font-weight: 700; }
 .calendar-cell.has-kegel::after {
   content: '';
   position: absolute;
@@ -744,7 +748,7 @@ button { font-family: inherit; }
 .day-picker button.active {
   background: var(--primary);
   border-color: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
 }
 
 .week-strip {
@@ -766,3 +770,102 @@ button { font-family: inherit; }
 .week-strip .wd.rescue { background: var(--primary-light); }
 .week-strip .wd.done { background: var(--primary-light); }
 .week-strip-legend { font-size: 11px; color: var(--text-muted); margin: 10px 0 0; line-height: 1.6; }
+
+/* Accessibilité */
+:focus-visible {
+  outline: 3px solid var(--primary);
+  outline-offset: 2px;
+}
+.switch input:focus-visible + .slider {
+  outline: 3px solid var(--primary);
+  outline-offset: 2px;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Réduire les animations : réglage de l'appli ou réglage du système */
+html[data-reduce-motion] *,
+html[data-reduce-motion] *::before,
+html[data-reduce-motion] *::after {
+  animation: none !important;
+  transition: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+/* Sans animation, les deux positions de l'exercice sont affichées côte à côte */
+html[data-reduce-motion] .exo-photo,
+html[data-reduce-motion] .exo-photo img { position: static; }
+html[data-reduce-motion] .exo-photo {
+  display: flex;
+  gap: 4px;
+  width: 100%;
+  aspect-ratio: auto;
+  background: transparent;
+  box-shadow: none;
+}
+html[data-reduce-motion] .exo-photo img { width: 50%; height: auto; border-radius: 10px; }
+html[data-reduce-motion] .exo-photo img.alt { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .exo-photo, .exo-photo img { position: static; }
+  .exo-photo { display: flex; gap: 4px; width: 100%; aspect-ratio: auto; background: transparent; box-shadow: none; }
+  .exo-photo img { width: 50%; height: auto; border-radius: 10px; }
+  .exo-photo img.alt { opacity: 1; }
+}
+
+/* Répétitions réelles */
+.stepper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.stepper-label { font-size: 13px; color: var(--text-muted); font-weight: 600; }
+.stepper-controls { display: flex; align-items: center; gap: 18px; }
+.stepper-controls button {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+}
+.stepper-controls output { font-size: 30px; font-weight: 800; min-width: 48px; text-align: center; }
+
+.lib-thumb {
+  width: 64px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 10px;
+  flex-shrink: 0;
+  background: var(--surface-2);
+}
+a.exercise-item { color: inherit; }
+
+/* Séquences de plus de 2 images (ex. burpees) : une image visible à la fois, 0,9 s chacune */
+.exo-photo.multi img { opacity: 0; animation: cycle4 3.6s steps(1, end) infinite; animation-delay: calc(var(--i) * 0.9s); }
+.exo-photo.multi img:first-child { opacity: 1; }
+@keyframes cycle4 {
+  0%, 24.99% { opacity: 1; }
+  25%, 100% { opacity: 0; }
+}
+html[data-reduce-motion] .exo-photo.multi { flex-wrap: wrap; }
+html[data-reduce-motion] .exo-photo.multi img { opacity: 1; width: calc(50% - 2px); }
+@media (prefers-reduced-motion: reduce) {
+  .exo-photo.multi { flex-wrap: wrap; }
+  .exo-photo.multi img { opacity: 1; width: calc(50% - 2px); }
+}

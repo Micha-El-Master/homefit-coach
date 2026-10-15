@@ -6,16 +6,16 @@
 <title>Tableau de bord — HomeFit Coach</title>
 <link rel="manifest" href="manifest.json" />
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-<meta name="theme-color" content="#ff5a36" />
+<meta name="theme-color" content="#d4361a" />
 <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
-<div class="app-shell">
+<div class="app-shell" role="main">
   <div class="topbar">
     <h1>🏋️ HomeFit Coach</h1>
     <div class="topbar-actions">
-      <button class="icon-btn" data-theme-toggle title="Changer le thème">🌓</button>
-      <a href="settings.html" class="icon-btn" title="Réglages">⚙️</a>
+      <button class="icon-btn" aria-label="Changer le thème" data-theme-toggle title="Changer le thème">🌓</button>
+      <a href="settings.html" class="icon-btn" aria-label="Réglages" title="Réglages">⚙️</a>
     </div>
   </div>
 
@@ -53,6 +53,12 @@
     <a href="settings.html" style="display:inline-block; margin-top:10px; font-size:13px; color:var(--text-muted); font-weight:600;">⚙️ Modifier mes jours</a>
   </div>
 
+  <div class="card" id="recap-card" style="display:none; background:var(--primary-light);">
+    <h3>📊 Ton bilan de la semaine</h3>
+    <p style="font-size:14px; margin:0 0 10px;">La semaine se termine : vois ce que tu as accompli et le conseil pour la suite.</p>
+    <a href="recap.html" class="btn btn-primary" style="padding:12px; font-size:14px;">Voir mon bilan</a>
+  </div>
+
   <div class="card">
     <h3>Accès rapide</h3>
     <div style="display:flex; gap:10px; flex-wrap:wrap;">
@@ -60,19 +66,13 @@
       <a href="nutrition.html" class="btn btn-secondary" style="width:auto; flex:1 1 45%;">🥗 Nutrition</a>
       <a href="kegel.html" class="btn btn-secondary" style="width:auto; flex:1 1 45%;">🧘 Kegel</a>
       <a href="progress.html" class="btn btn-secondary" style="width:auto; flex:1 1 45%;">📈 Progrès</a>
+      <a href="library.html" class="btn btn-secondary" style="width:auto; flex:1 1 45%;">📚 Exercices</a>
+      <a href="recap.html" class="btn btn-secondary" style="width:auto; flex:1 1 45%;">📊 Bilan</a>
     </div>
   </div>
 </div>
 
-<nav class="bottom-nav">
-  <div class="nav-inner">
-    <a href="dashboard.html" data-nav-link><span class="nav-icon">🏠</span>Accueil</a>
-    <a href="workout.html" data-nav-link><span class="nav-icon">🏋️</span>Séance</a>
-    <a href="nutrition.html" data-nav-link><span class="nav-icon">🥗</span>Nutrition</a>
-    <a href="kegel.html" data-nav-link><span class="nav-icon">🧘</span>Kegel</a>
-    <a href="progress.html" data-nav-link><span class="nav-icon">📈</span>Progrès</a>
-  </div>
-</nav>
+<nav class="bottom-nav" id="bottom-nav" aria-label="Navigation principale"></nav>
 
 <script src="js/storage.js"></script>
 <script src="js/exercises.js"></script>
@@ -133,11 +133,13 @@
   const DAY_SHORT = { 1: 'Lun', 2: 'Mar', 3: 'Mer', 4: 'Jeu', 5: 'Ven', 6: 'Sam', 0: 'Dim' };
   document.getElementById('week-strip').innerHTML = plan.days
     .map((d) => {
-      const icon = d.done ? '✅' : d.missed ? '❌' : d.rescue ? '🔁' : d.type === 'training' ? '🏋️' : '😌';
+      const icon = d.beforeStart ? '·' : d.done ? '✅' : d.missed ? '❌' : d.rescue ? '🔁' : d.type === 'training' ? '🏋️' : '😌';
       const cls = ['wd', d.isToday ? 'today' : '', d.done ? 'done' : '', d.rescue && !d.done ? 'rescue' : ''].join(' ');
       return `<div class="${cls}">${DAY_SHORT[d.weekday]}<span class="ico">${icon}</span></div>`;
     })
     .join('');
+
+  if ([0, 1].includes(new Date().getDay())) document.getElementById('recap-card').style.display = 'block';
 
   if (plan.shortfall > 0) {
     const alert = document.getElementById('week-alert');

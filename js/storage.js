@@ -66,12 +66,15 @@ const DAYS_BY_TARGET = { 1: [3], 2: [1, 4], 3: [1, 3, 5], 4: [1, 2, 4, 5], 5: [1
 function getSettings() {
   const raw = localStorage.getItem(STORAGE_KEYS.SETTINGS);
   const defaults = {
-    theme: 'light',
+    theme: 'auto',
+    fontScale: 1,
+    reduceMotion: false,
     reminderEnabled: false,
     reminderTime: '08:00',
     lastReminderDate: null,
     restSeconds: 45,
     trainingDays: DEFAULT_TRAINING_DAYS,
+    equipment: ['chaise', 'charges'],
     voice: false,
     warmup: true,
     cooldown: true,
@@ -209,6 +212,8 @@ function getWeekPlan(now = new Date()) {
   const planned = new Set(getTrainingDays());
   const sessionDates = new Set(getSessionLog().map((s) => s.date));
   const todayIso = isoOf(now);
+  const profile = getProfile();
+  const startIso = profile ? profile.startDate : '0000-00-00';
   let debt = 0;
   const days = [];
 
@@ -218,6 +223,12 @@ function getWeekPlan(now = new Date()) {
     const iso = isoOf(d);
     const isPast = iso < todayIso;
     const done = sessionDates.has(iso);
+
+    // Avant le début du programme : ni séance attendue, ni retard, ni rattrapage.
+    if (iso < startIso) {
+      days.push({ iso, weekday: d.getDay(), type: 'rest', rescue: false, done, missed: false, isPast, isToday: false, beforeStart: true });
+      continue;
+    }
     let type = planned.has(d.getDay()) ? 'training' : 'rest';
     let rescue = false;
 
@@ -268,8 +279,8 @@ function getStreak() {
   return streak;
 }
 
-function exportData() {
-  const data = {
+function collectExportData() {
+  return {
     app: 'HomeFit Coach',
     exportedAt: new Date().toISOString(),
     profile: getProfile(),
@@ -280,26 +291,141 @@ function exportData() {
     water: readJSON(STORAGE_KEYS.WATER, {}),
     shopping: readJSON(STORAGE_KEYS.SHOPPING, []),
   };
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+}
+
+function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `homefit-coach-${todayISO()}.json`;
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
 
+function exportData() {
+  const blob = new Blob([JSON.stringify(collectExportData(), null, 2)], { type: 'application/json' });
+  downloadBlob(blob, `homefit-coach-${todayISO()}.json`);
+}
+
+// Partage natif (AirDrop, messages…) du fichier de sauvegarde, quand le navigateur le permet.
+async function shareDataFile() {
+  const file = new File([JSON.stringify(collectExportData(), null, 2)], `homefit-coach-${todayISO()}.json`, {
+    type: 'application/json',
+  });
+  if (!navigator.canShare || !navigator.canShare({ files: [file] })) return false;
+  await navigator.share({ files: [file], title: 'Sauvegarde HomeFit Coach' });
+  return true;
+}
+
+// Vérifie la forme des données avant de toucher au stockage, pour ne pas écraser un profil sain par un fichier invalide.
+function validateImportData(data) {
+  const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
+  if (!isObj(data) || data.app !== 'HomeFit Coach') throw new Error('Fichier invalide');
+  if (!isObj(data.profile) || !data.profile.name || !data.profile.startDate) throw new Error('Profil manquant');
+  if (data.sessions !== undefined && !Array.isArray(data.sessions)) throw new Error('Séances invalides');
+  if (data.kegel !== undefined && !Array.isArray(data.kegel)) throw new Error('Historique Kegel invalide');
+  if (data.settings !== undefined && !isObj(data.settings)) throw new Error('Réglages invalides');
+}
+
 function importData(jsonString) {
   const data = JSON.parse(jsonString);
-  if (data.profile) saveProfile(data.profile);
-  if (data.sessions) localStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(data.sessions));
-  if (data.kegel) localStorage.setItem(STORAGE_KEYS.KEGEL, JSON.stringify(data.kegel));
+  validateImportData(data);
+  saveProfile(data.profile);
+  writeJSON(STORAGE_KEYS.SESSIONS, data.sessions || []);
+  writeJSON(STORAGE_KEYS.KEGEL, data.kegel || []);
   if (data.settings) saveSettings(data.settings);
-  if (data.adjustments) writeJSON(STORAGE_KEYS.ADJUST, data.adjustments);
-  if (data.water) writeJSON(STORAGE_KEYS.WATER, data.water);
-  if (data.shopping) writeJSON(STORAGE_KEYS.SHOPPING, data.shopping);
+  writeJSON(STORAGE_KEYS.ADJUST, data.adjustments || {});
+  writeJSON(STORAGE_KEYS.WATER, data.water || {});
+  writeJSON(STORAGE_KEYS.SHOPPING, data.shopping || []);
+  clearInProgress();
+}
+
+function bytesToBase64(bytes) {
+  let binary = '';
+  bytes.forEach((b) => (binary += String.fromCharCode(b)));
+  return btoa(binary);
+}
+
+function base64ToBytes(b64) {
+  return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+}
+
+async function streamToBytes(stream) {
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+// Code de transfert : sauvegarde JSON compressée (gzip) puis encodée en texte, à copier d'un appareil à l'autre.
+async function buildTransferCode() {
+  const bytes = new TextEncoder().encode(JSON.stringify(collectExportData()));
+  if (typeof CompressionStream === 'undefined') return 'HFC0:' + bytesToBase64(bytes);
+  const gz = await streamToBytes(new Blob([bytes]).stream().pipeThrough(new CompressionStream('gzip')));
+  return 'HFC1:' + bytesToBase64(gz);
+}
+
+async function readTransferCode(code) {
+  const text = code.trim();
+  const prefix = text.slice(0, 5);
+  let bytes;
+  try {
+    bytes = base64ToBytes(text.slice(5).replace(/\s+/g, ''));
+  } catch (e) {
+    throw new Error('Code invalide');
+  }
+  if (prefix === 'HFC1:') {
+    if (typeof DecompressionStream === 'undefined') throw new Error('Ce navigateur ne sait pas lire ce code');
+    bytes = await streamToBytes(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip')));
+  } else if (prefix !== 'HFC0:') {
+    throw new Error('Code invalide');
+  }
+  return new TextDecoder().decode(bytes);
+}
+
+// Agenda (.ics) : un événement hebdomadaire récurrent sur les jours d'entraînement choisis, à l'heure du rappel.
+function buildICS(now = new Date()) {
+  const days = getTrainingDays();
+  const [h, m] = (getSettings().reminderTime || '08:00').split(':').map(Number);
+  const codes = { 0: 'SU', 1: 'MO', 2: 'TU', 3: 'WE', 4: 'TH', 5: 'FR', 6: 'SA' };
+  const pad = (n) => String(n).padStart(2, '0');
+  const local = (d) => `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
+  const utc = (d) => `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}Z`;
+
+  let first = null;
+  for (let i = 0; i < 8 && !first; i++) {
+    const d = new Date(now);
+    d.setDate(d.getDate() + i);
+    d.setHours(h, m, 0, 0);
+    if (days.includes(d.getDay()) && d >= now) first = d;
+  }
+  const end = new Date(first.getTime() + 45 * 60000);
+
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//HomeFit Coach//FR',
+    'CALSCALE:GREGORIAN',
+    'BEGIN:VEVENT',
+    `UID:homefit-${now.getTime()}@homefit-coach`,
+    `DTSTAMP:${utc(now)}`,
+    `DTSTART:${local(first)}`,
+    `DTEND:${local(end)}`,
+    `RRULE:FREQ=WEEKLY;BYDAY=${days.map((d) => codes[d]).join(',')};COUNT=${days.length * TOTAL_WEEKS}`,
+    'SUMMARY:Séance HomeFit Coach',
+    'DESCRIPTION:Ouvre HomeFit Coach pour lancer ta séance du jour.',
+    'BEGIN:VALARM',
+    'TRIGGER:-PT10M',
+    'ACTION:DISPLAY',
+    'DESCRIPTION:Séance HomeFit Coach dans 10 minutes',
+    'END:VALARM',
+    'END:VEVENT',
+    'END:VCALENDAR',
+    '',
+  ].join('\r\n');
+}
+
+function downloadICS() {
+  downloadBlob(new Blob([buildICS()], { type: 'text/calendar;charset=utf-8' }), 'homefit-coach-agenda.ics');
 }
 
 function getWeekStats() {

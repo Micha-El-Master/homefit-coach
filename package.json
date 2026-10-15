@@ -1,0 +1,9 @@
+{
+  "name": "homefit-coach",
+  "private": true,
+  "description": "HomeFit Coach : application web de coaching fitness à domicile",
+  "scripts": {
+    "test": "node --test \"tests/*.test.js\"",
+    "start": "node serve.js"
+  }
+}

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Exercices — HomeFit Coach</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<meta name="theme-color" content="#d4361a" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="app-shell" role="main">
+  <div class="topbar">
+    <h1>📚 Exercices</h1>
+    <div class="topbar-actions">
+      <a href="dashboard.html" class="icon-btn" aria-label="Retour à l'accueil" title="Retour à l'accueil">🏠</a>
+    </div>
+  </div>
+
+  <label class="sr-only" for="lib-search">Rechercher un exercice</label>
+  <input class="form-input" type="search" id="lib-search" placeholder="Rechercher (ex. squat, dos, triceps…)" autocomplete="off" style="margin-bottom:12px;" />
+  <div class="goal-select" id="lib-filters" role="group" aria-label="Filtrer par catégorie"></div>
+  <p id="lib-count" style="font-size:12px; color:var(--text-muted); margin:0 0 10px;" aria-live="polite"></p>
+  <ul id="lib-list"></ul>
+</div>
+
+<nav class="bottom-nav" id="bottom-nav" aria-label="Navigation principale"></nav>
+
+<script src="js/storage.js"></script>
+<script src="js/exercises.js"></script>
+<script src="js/illustrations.js"></script>
+<script src="js/app.js"></script>
+<script>
+  const CATEGORIES = ['Tous', 'Haut du corps', 'Jambes', 'Dos', 'Abdos', 'Cardio', 'Échauffement', 'Étirements'];
+  let category = 'Tous';
+  let query = '';
+
+  const normalize = (t) => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+  function thumb(ex) {
+    if (!PHOTO_EXERCISES.has(ex.id)) return `<div class="emoji">${ex.icon}</div>`;
+    const photo = PHOTO_ALIAS[ex.id] || ex.id;
+    return `<img class="lib-thumb" src="images/exercises/${photo}-0.jpg" alt="" loading="lazy" />`;
+  }
+
+  function render() {
+    const q = normalize(query.trim());
+    const list = Object.values(EXERCISES).filter((ex) => {
+      if (category !== 'Tous' && ex.category !== category) return false;
+      if (!q) return true;
+      const hay = normalize([ex.name, ex.category, ...ex.muscles.map((m) => m.label)].join(' '));
+      return hay.includes(q);
+    });
+    document.getElementById('lib-count').textContent = `${list.length} exercice${list.length > 1 ? 's' : ''}`;
+    document.getElementById('lib-list').innerHTML = list.length
+      ? list
+          .map((ex) => {
+            const gear = (ex.requires || []).map((r) => EQUIPMENT[r].icon).join(' ');
+            return `<li><a class="exercise-item" href="exercise.html?id=${ex.id}">
+              ${thumb(ex)}
+              <div class="info">
+                <div class="name">${ex.name}</div>
+                <div class="meta">${ex.category} · ${ex.muscles.map((m) => m.label).join(', ')} ${gear}</div>
+              </div>
+              <div class="chevron" aria-hidden="true">›</div>
+            </a></li>`;
+          })
+          .join('')
+      : '<div class="empty-state"><div class="big-emoji">🔍</div><p>Aucun exercice ne correspond.</p></div>';
+  }
+
+  document.getElementById('lib-filters').innerHTML = CATEGORIES.map(
+    (c) => `<button type="button" data-cat="${c}" class="${c === category ? 'active' : ''}" aria-pressed="${c === category}">${c}</button>`
+  ).join('');
+  document.getElementById('lib-filters').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-cat]');
+    if (!btn) return;
+    category = btn.dataset.cat;
+    document.querySelectorAll('#lib-filters button').forEach((b) => {
+      b.classList.toggle('active', b === btn);
+      b.setAttribute('aria-pressed', String(b === btn));
+    });
+    render();
+  });
+  document.getElementById('lib-search').addEventListener('input', (e) => {
+    query = e.target.value;
+    render();
+  });
+  render();
+</script>
+</body>
+</html>

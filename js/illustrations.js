@@ -106,15 +106,43 @@ const POSES = {
 const PHOTO_EXERCISES = new Set([
   'pompes', 'dips-chaise', 'extension-triceps', 'elevations-laterales', 'squat', 'fentes',
   'pont-fessier', 'crunch', 'superman', 'curl-biceps', 'mountain-climbers', 'squat-jump', 'planche',
-  'pike-pushup', 'mollets', 'rowing-serviette', 'tirage-elastique', 'star-jump',
+  'pike-pushup', 'mollets', 'rowing-serviette', 'tirage-elastique', 'star-jump', 'gainage-dorsal', 'burpees',
 ]);
+
+// Le gainage dorsal est la position « superman » tenue : mêmes photos.
+const PHOTO_ALIAS = { 'gainage-dorsal': 'superman' };
+
+// Nombre d'images par exercice (2 par défaut : départ et arrivée).
+const PHOTO_FRAMES = { burpees: 4 };
+
+// Crédits des images qui ne sont pas dans le domaine public (CC BY-SA : auteur, licence et modifications obligatoires).
+const PHOTO_CREDITS = {
+  burpees:
+    'Photos : <a href="https://commons.wikimedia.org/wiki/Category:Burpee" target="_blank" rel="noopener">Taco Fleur, Wikimedia Commons</a>, ' +
+    '<a href="https://creativecommons.org/licenses/by-sa/4.0/deed.fr" target="_blank" rel="noopener">CC BY-SA 4.0</a>, redimensionnées.',
+};
+const DEFAULT_PHOTO_CREDIT = 'Images : free-exercise-db (domaine public)';
+
+function photoCredit(ex) {
+  if (!PHOTO_EXERCISES.has(ex.id)) return '';
+  return PHOTO_CREDITS[ex.id] || DEFAULT_PHOTO_CREDIT;
+}
 
 function renderExerciseMedia(ex) {
   if (!PHOTO_EXERCISES.has(ex.id)) return renderIllustration(ex.pose);
-  return `<div class="exo-photo">
-    <img src="images/exercises/${ex.id}-0.jpg" alt="${ex.name} : position de départ" />
-    <img class="alt" src="images/exercises/${ex.id}-1.jpg" alt="${ex.name} : position d’arrivée" />
+  const photo = PHOTO_ALIAS[ex.id] || ex.id;
+  const frames = PHOTO_FRAMES[ex.id] || 2;
+  if (frames === 2) {
+    return `<div class="exo-photo">
+    <img src="images/exercises/${photo}-0.jpg" alt="${ex.name} : position de départ" />
+    <img class="alt" src="images/exercises/${photo}-1.jpg" alt="${ex.name} : position d’arrivée" />
   </div>`;
+  }
+  const imgs = Array.from(
+    { length: frames },
+    (_, i) => `<img style="--i:${i}" src="images/exercises/${photo}-${i}.jpg" alt="${ex.name} : étape ${i + 1} sur ${frames}" />`
+  ).join('');
+  return `<div class="exo-photo multi" style="--n:${frames}">${imgs}</div>`;
 }
 
 function getPose(key) {

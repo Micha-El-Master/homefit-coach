@@ -6,18 +6,18 @@
 <title>Kegel — HomeFit Coach</title>
 <link rel="manifest" href="manifest.json" />
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-<meta name="theme-color" content="#ff5a36" />
+<meta name="theme-color" content="#d4361a" />
 <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
-<div class="app-shell">
+<div class="app-shell" role="main">
 
   <div id="view-intro">
     <div class="topbar">
       <h1>🧘 Kegel</h1>
       <div class="topbar-actions">
-        <button class="icon-btn" data-theme-toggle title="Changer le thème">🌓</button>
-        <a href="settings.html" class="icon-btn" title="Réglages">⚙️</a>
+        <button class="icon-btn" aria-label="Changer le thème" data-theme-toggle title="Changer le thème">🌓</button>
+        <a href="settings.html" class="icon-btn" aria-label="Réglages" title="Réglages">⚙️</a>
       </div>
     </div>
 
@@ -71,15 +71,7 @@
   </div>
 </div>
 
-<nav class="bottom-nav">
-  <div class="nav-inner">
-    <a href="dashboard.html" data-nav-link><span class="nav-icon">🏠</span>Accueil</a>
-    <a href="workout.html" data-nav-link><span class="nav-icon">🏋️</span>Séance</a>
-    <a href="nutrition.html" data-nav-link><span class="nav-icon">🥗</span>Nutrition</a>
-    <a href="kegel.html" data-nav-link><span class="nav-icon">🧘</span>Kegel</a>
-    <a href="progress.html" data-nav-link><span class="nav-icon">📈</span>Progrès</a>
-  </div>
-</nav>
+<nav class="bottom-nav" id="bottom-nav" aria-label="Navigation principale"></nav>
 
 <script src="js/storage.js"></script>
 <script src="js/timer.js"></script>

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'homefit-coach-v7';
+const CACHE_NAME = 'homefit-coach-v9';
 const ASSETS = [
   'index.html',
   'dashboard.html',
@@ -17,6 +17,9 @@ const ASSETS = [
   'js/illustrations.js',
   'coach.html',
   'settings.html',
+  'library.html',
+  'recap.html',
+  'js/recap.js',
   'manifest.json',
   'icons/icon.svg',
   'icons/icon-192.png',
@@ -59,6 +62,10 @@ const ASSETS = [
   'images/exercises/tirage-elastique-1.jpg',
   'images/exercises/star-jump-0.jpg',
   'images/exercises/star-jump-1.jpg',
+  'images/exercises/burpees-0.jpg',
+  'images/exercises/burpees-1.jpg',
+  'images/exercises/burpees-2.jpg',
+  'images/exercises/burpees-3.jpg',
 ];
 
 self.addEventListener('install', (event) => {
