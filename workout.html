@@ -132,6 +132,12 @@
         <div class="label">Semaines de suite</div>
       </div>
     </div>
+    <div class="card hide-on-recovery" id="share-card">
+      <h2>📲 Fier de ta séance ?</h2>
+      <p style="font-size:13px; color:var(--text-muted); margin:-6px 0 12px; line-height:1.5;">Crée une image avec tes stats, prête pour ton Statut WhatsApp.</p>
+      <a id="share-session" href="partager.html?type=session" class="btn btn-primary" style="margin-bottom:8px;">Poster cette séance sur mon Statut</a>
+      <a id="share-badge" href="partager.html?type=achievement" class="btn btn-outline" style="display:none;"></a>
+    </div>
     <div class="card hide-on-recovery" id="feeling-card">
       <h2>Comment c'était ?</h2>
       <div style="display:flex; gap:8px;" id="feeling-buttons">
@@ -639,6 +645,13 @@
       btn.classList.add('btn-primary');
     });
 
+    document.getElementById('share-session').href = `partager.html?type=session&i=${getSessionLog().length - 1}`;
+    if (newlyUnlocked.length) {
+      const shareBadge = document.getElementById('share-badge');
+      shareBadge.href = `partager.html?type=achievement&a=${encodeURIComponent('badge:' + newlyUnlocked[0].id)}`;
+      shareBadge.textContent = `Poster le badge « ${newlyUnlocked[0].label} »`;
+      shareBadge.style.display = 'flex';
+    }
     if (newlyUnlocked.length) {
       document.getElementById('summary-badges-card').style.display = 'block';
       document.getElementById('summary-badges').innerHTML = newlyUnlocked

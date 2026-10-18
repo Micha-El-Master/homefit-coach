@@ -49,14 +49,10 @@
 
   <div class="card">
     <h2>📲 Partager mon bilan</h2>
-    <p style="font-size:13px; color:var(--text-muted); margin:-6px 0 12px; line-height:1.5;">Seulement des totaux : séances, minutes, répétitions, série. Aucun poids ni détail de santé.</p>
-    <a id="share-wa" class="btn btn-primary" target="_blank" rel="noopener" style="margin-bottom:10px;">Envoyer sur WhatsApp</a>
-    <button class="btn btn-secondary" id="card-btn">🖼️ Créer une carte à partager</button>
-    <div id="card-box" style="display:none; margin-top:14px; text-align:center;">
-      <img id="card-preview" alt="Aperçu de la carte de progression" style="width:100%; max-width:320px; border-radius:16px; box-shadow:var(--shadow);" />
-      <button class="btn btn-primary" id="card-share" style="margin-top:12px;">Partager l'image</button>
-      <p id="card-status" role="status" style="font-size:13px; margin:10px 0 0;"></p>
-    </div>
+    <p style="font-size:13px; color:var(--text-muted); margin:-6px 0 12px; line-height:1.5;">Crée une image avec tes stats, prête à poster en Statut WhatsApp. Seulement des totaux : aucun poids ni détail de santé.</p>
+    <a id="share-status" href="partager.html?type=week" class="btn btn-primary" style="margin-bottom:10px;">📲 Poster sur mon Statut</a>
+    <a id="share-wa" class="btn btn-secondary" target="_blank" rel="noopener">💬 Envoyer le texte à un contact</a>
+    <p style="font-size:12px; color:var(--text-muted); margin:10px 0 0; line-height:1.5;">Le bouton texte n'envoie que du texte : WhatsApp n'accepte pas d'image par ce lien. Pour l'image, utilise le Statut.</p>
   </div>
 
   <div class="card" style="background:var(--primary-light);">
@@ -71,7 +67,6 @@
 <script src="js/exercises.js"></script>
 <script src="js/recap.js"></script>
 <script src="js/community.js"></script>
-<script src="js/sharecard.js"></script>
 <script src="js/app.js"></script>
 <script>
   const currentMonday = mondayOf(new Date());
@@ -124,7 +119,7 @@
     // Partage : message WhatsApp et carte image pour la semaine affichée
     currentRecap = recap;
     document.getElementById('share-wa').href = whatsappShareLink(buildRecapShareText(recap, getStreak(), communityConfig, profile));
-    document.getElementById('card-box').style.display = 'none';
+    document.getElementById('share-status').href = `partager.html?type=week&w=${isoOf(monday)}`;
   }
 
   document.getElementById('week-prev').addEventListener('click', () => {
@@ -135,23 +130,6 @@
     monday.setDate(monday.getDate() + 7);
     render();
   });
-  document.getElementById('card-btn').addEventListener('click', () => {
-    const data = buildShareCardData(currentRecap, getStreak(), profile, communityConfig);
-    const canvas = document.createElement('canvas');
-    drawShareCard(canvas, data);
-    document.getElementById('card-preview').src = canvas.toDataURL('image/png');
-    document.getElementById('card-box').style.display = 'block';
-    document.getElementById('card-share').onclick = async () => {
-      const status = document.getElementById('card-status');
-      try {
-        const result = await shareCardImage(data, buildRecapShareText(currentRecap, getStreak(), communityConfig, profile));
-        status.textContent = result === 'shared' ? '✔ Partagé.' : '✔ Image téléchargée : ajoute-la à ton message ou à ton Statut WhatsApp.';
-      } catch (e) {
-        status.textContent = e && e.name === 'AbortError' ? '' : 'Partage impossible sur cet appareil.';
-      }
-    };
-  });
-
   render();
 </script>
 </body>

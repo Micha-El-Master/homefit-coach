@@ -113,30 +113,6 @@ test('lien WhatsApp : message encodé dans l\'URL', () => {
   assert.ok(!url.includes(' ') && !url.includes('\n'));
 });
 
-test('carte à partager : données sans contenu sensible', () => {
-  const app = createApp();
-  const cfg = cfgOf(app, {});
-  const recap = { from: '2026-10-12', to: '2026-10-18', count: 4, target: 4, minutes: 120, totalReps: 500 };
-  const d = app.run(`buildShareCardData(${JSON.stringify(recap)}, 3, { name: 'Léa', cohort: '2026-11-02', body: { weight: 70 } }, ${JSON.stringify(cfg)})`);
-  assert.strictEqual(d.sessions, '4/4');
-  assert.strictEqual(d.reached, true);
-  assert.deepStrictEqual(d.stats.map((s) => s.value), ['120', '500', '3']);
-  assert.strictEqual(d.cohort, 'Cohorte du 2 novembre');
-  assert.ok(!d.url.startsWith('https://'));
-  assert.ok(!JSON.stringify(d).match(/Léa|70/));
-});
-
-test('carte à partager : sans série, on affiche l\'objectif plutôt qu\'un zéro', () => {
-  const app = createApp();
-  const cfg = cfgOf(app, {});
-  const recap = { from: '2026-10-12', to: '2026-10-18', count: 2, target: 4, minutes: 60, totalReps: 200 };
-  const d = app.run(`buildShareCardData(${JSON.stringify(recap)}, 0, {}, ${JSON.stringify(cfg)})`);
-  assert.deepStrictEqual(d.stats[2], { value: '4', label: 'séances visées' });
-  assert.strictEqual(d.reached, false);
-  assert.strictEqual(d.cohort, '');
-  assert.strictEqual(app.run(`buildShareCardData(${JSON.stringify(recap)}, 1, {}, ${JSON.stringify(cfg)})`).stats[2].label, 'semaine de suite');
-});
-
 test('cohorte à venir : le programme démarre à la date de la cohorte et la série d\'origine est conservée', () => {
   const app = createApp();
   app.profile({ startDate: '2026-09-01' });

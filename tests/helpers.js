@@ -5,7 +5,7 @@ const path = require('path');
 const vm = require('vm');
 
 const ROOT = path.join(__dirname, '..');
-const FILES = ['js/storage.js', 'js/exercises.js', 'js/illustrations.js', 'js/workouts.js', 'js/badges.js', 'js/recap.js', 'js/meals.js', 'js/challenges.js', 'js/community.js'];
+const FILES = ['js/storage.js', 'js/exercises.js', 'js/illustrations.js', 'js/workouts.js', 'js/badges.js', 'js/recap.js', 'js/meals.js', 'js/challenges.js', 'js/community.js', 'js/statut.js'];
 
 function createApp({ now = new Date(2026, 9, 15, 12, 0, 0), store = {} } = {}) {
   const fixed = now.getTime();

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'homefit-coach-v14';
+const CACHE_NAME = 'homefit-coach-v15';
 const ASSETS = [
   'index.html',
   'dashboard.html',
@@ -28,6 +28,8 @@ const ASSETS = [
   'communaute.json',
   'js/community.js',
   'js/sharecard.js',
+  'js/statut.js',
+  'partager.html',
   'manifest.json',
   'icons/icon.svg',
   'icons/icon-192.png',

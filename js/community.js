@@ -132,22 +132,3 @@ function buildRecapShareText(recap, streak, cfg, profile) {
   lines.push(profile && profile.cohort ? `Rejoins-nous : ${cohortLink(cfg, profile.cohort)}` : `Essaie avec moi : ${cfg.appUrl}`);
   return lines.join('\n');
 }
-
-// Données de la carte de progression à partager (image) : même principe, aucun contenu sensible.
-function buildShareCardData(recap, streak, profile, cfg) {
-  return {
-    period: `${formatDateFr(recap.from, false)} – ${formatDateFr(recap.to, false)}`,
-    sessions: `${recap.count}/${recap.target}`,
-    reached: recap.count >= recap.target,
-    stats: [
-      { value: String(recap.minutes), label: 'minutes' },
-      { value: String(recap.totalReps), label: 'répétitions' },
-      // Une série à zéro n'est pas valorisante sur une image partagée : on montre l'objectif visé à la place.
-      streak > 0
-        ? { value: String(streak), label: streak > 1 ? 'semaines de suite' : 'semaine de suite' }
-        : { value: String(recap.target), label: 'séances visées' },
-    ],
-    cohort: profile && profile.cohort ? cohortLabel(profile.cohort) : '',
-    url: cfg.appUrl.replace(/^https:\/\//, ''),
-  };
-}

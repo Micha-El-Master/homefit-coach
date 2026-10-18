@@ -114,7 +114,9 @@
       .reverse()
       .map((h) => {
         const def = CHALLENGES[h.id];
-        return `<div class="history-item"><span>${h.success ? '🏅' : '❌'} ${def.name}</span><span>${h.validated}/${h.required}</span></div>`;
+        const idx = data.history.indexOf(h);
+        const share = h.success ? ` <a href="partager.html?type=achievement&a=${encodeURIComponent('challenge:' + idx)}" aria-label="Poster ce défi sur mon Statut" title="Poster sur mon Statut" style="text-decoration:none;">📲</a>` : '';
+        return `<div class="history-item"><span>${h.success ? '🏅' : '❌'} ${def.name}${share}</span><span>${h.validated}/${h.required}</span></div>`;
       })
       .join('');
   }

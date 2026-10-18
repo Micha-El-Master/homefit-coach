@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Poster en Statut — HomeFit Coach</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<meta name="theme-color" content="#d4361a" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="app-shell" role="main">
+  <div class="topbar">
+    <h1>📲 Mon Statut</h1>
+    <div class="topbar-actions">
+      <button type="button" class="icon-btn" id="back-btn" aria-label="Retour" title="Retour">←</button>
+    </div>
+  </div>
+  <p style="font-size:14px; line-height:1.6; margin:-8px 0 14px;">Crée une image avec tes stats, prête à poster en <strong>Statut WhatsApp</strong>. Elle est fabriquée sur ton téléphone : rien n'est envoyé nulle part.</p>
+
+  <div class="goal-select" id="type-tabs" role="group" aria-label="Type de carte"></div>
+
+  <div id="source-row" style="margin-bottom:12px;">
+    <label class="sr-only" for="source-select">Choisir l'élément à afficher</label>
+    <select class="form-select" id="source-select"></select>
+  </div>
+
+  <p id="empty-note" role="status" style="display:none; font-size:14px; line-height:1.6; padding:14px; background:var(--surface); border-radius:var(--radius); margin:0 0 12px;"></p>
+
+  <div id="preview-box" style="text-align:center; margin-bottom:14px;">
+    <canvas id="preview" role="img" aria-label="Aperçu de la carte" style="width:100%; max-width:300px; height:auto; aspect-ratio:9/16; border-radius:20px; box-shadow:var(--shadow);"></canvas>
+  </div>
+
+  <div class="card" id="style-card">
+    <h2>🎨 Style</h2>
+    <div class="goal-select" id="theme-chips" role="group" aria-label="Thème de la carte" style="margin-bottom:10px;"></div>
+    <div class="settings-row">
+      <div>
+        <div class="row-label" id="name-label">Afficher mon prénom</div>
+        <div class="row-desc">Décoché par défaut : la carte reste anonyme.</div>
+      </div>
+      <label class="switch"><input type="checkbox" id="name-switch" aria-labelledby="name-label" /><span class="slider"></span></label>
+    </div>
+    <div style="padding-top:12px;">
+      <label class="btn btn-secondary" for="photo-input" style="display:flex; cursor:pointer; padding:12px; font-size:14px;">🖼️ Ajouter ma photo en fond</label>
+      <input type="file" id="photo-input" accept="image/*" style="position:absolute; width:1px; height:1px; opacity:0;" />
+      <button type="button" class="btn btn-outline" id="photo-remove" style="display:none; margin-top:8px; padding:10px; font-size:14px;">Retirer la photo</button>
+      <p style="font-size:12px; color:var(--text-muted); margin:8px 0 0; line-height:1.5;">La photo reste sur ton téléphone : elle n'est ni envoyée ni enregistrée. Choisis-en une où tu es à l'aise ; ne mets pas la photo de quelqu'un d'autre sans son accord.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>✍️ Légende</h2>
+    <label class="sr-only" for="caption">Légende du Statut</label>
+    <textarea class="form-input" id="caption" rows="5" style="font-size:14px; line-height:1.5;"></textarea>
+    <button type="button" class="btn btn-secondary" id="caption-copy" style="margin-top:10px; padding:10px; font-size:14px;">📋 Copier la légende</button>
+  </div>
+
+  <button type="button" class="btn btn-primary" id="post-btn" style="margin-bottom:10px;">📲 Poster sur mon Statut</button>
+  <button type="button" class="btn btn-secondary" id="download-btn">💾 Télécharger l'image</button>
+  <p id="post-status" role="status" style="font-size:13px; margin:12px 0 0; line-height:1.5; min-height:18px;"></p>
+
+  <div class="card" style="margin-top:12px;">
+    <h2>Comment poster ?</h2>
+    <ol style="font-size:14px; line-height:1.7; padding-left:18px; margin:0;">
+      <li>Touche <strong>Poster sur mon Statut</strong> : la légende est copiée.</li>
+      <li>Dans la feuille de partage, choisis <strong>WhatsApp</strong>, puis <strong>Mon statut</strong> (le libellé varie selon ton téléphone).</li>
+      <li>Colle la légende (appui long sur le champ de texte → Coller), puis publie.</li>
+    </ol>
+    <p style="font-size:12px; color:var(--text-muted); margin:10px 0 0; line-height:1.5;">Sur ordinateur, l'image est téléchargée : ajoute-la ensuite à ton Statut depuis ton téléphone.</p>
+  </div>
+</div>
+
+<nav class="bottom-nav" id="bottom-nav" aria-label="Navigation principale"></nav>
+
+<script src="js/storage.js"></script>
+<script src="js/exercises.js"></script>
+<script src="js/challenges.js"></script>
+<script src="js/badges.js"></script>
+<script src="js/recap.js"></script>
+<script src="js/community.js"></script>
+<script src="js/statut.js"></script>
+<script src="js/sharecard.js"></script>
+<script src="js/app.js"></script>
+<script>
+  const profile = getProfile();
+  const params = new URLSearchParams(location.search);
+  const TYPE_ORDER = ['week', 'session', 'achievement', 'progress'];
+  let cfg = sanitizeCommunityConfig(null);
+
+  const state = {
+    type: params.get('type'),
+    theme: STATUS_THEMES[getSettings().shareTheme] ? getSettings().shareTheme : 'feu',
+    includeName: !!getSettings().shareShowName,
+    photo: null,
+    blob: null,
+    captionEdited: false,
+    selected: { week: params.get('w'), session: params.get('i'), achievement: params.get('a'), progress: params.get('x') },
+  };
+
+  const $ = (id) => document.getElementById(id);
+  const preview = $('preview');
+  const sessions = getSessionLog();
+  const currentMonday = mondayOf(new Date());
+  const firstMonday = mondayOf(new Date((profile.streakStart || profile.startDate) + 'T00:00:00'));
+  const fmtShort = (d) => d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+
+  // ---- Sources disponibles pour chaque type
+  function weekOptions() {
+    const out = [];
+    for (let m = new Date(currentMonday); m >= firstMonday && out.length < 12; m.setDate(m.getDate() - 7)) {
+      const end = new Date(m);
+      end.setDate(end.getDate() + 6);
+      const recap = getWeekRecap(m);
+      out.push({ value: isoOf(m), label: `${fmtShort(m)} – ${fmtShort(end)}${m.getTime() === currentMonday.getTime() ? ' (en cours)' : ''} · ${recap.count}/${recap.target}`, recap });
+    }
+    return out;
+  }
+
+  function sourcesFor(type) {
+    if (type === 'week') return weekOptions().filter((o) => o.recap.count > 0);
+    if (type === 'session') {
+      return sessions
+        .map((s, idx) => ({ value: String(idx), label: `${formatDateFr(s.date, false)} · ${s.title}` }))
+        .reverse()
+        .slice(0, 10);
+    }
+    if (type === 'achievement') return getAchievements().map((a) => ({ value: a.id, label: `${a.icon} ${a.title}` }));
+    return listProgressCandidates(sessions).map((c) => ({ value: c.id, label: `${c.name} : ${c.from} → ${c.to}` }));
+  }
+
+  const available = {};
+  TYPE_ORDER.forEach((t) => (available[t] = sourcesFor(t)));
+  const firstAvailable = TYPE_ORDER.find((t) => available[t].length);
+  if (!TYPE_ORDER.includes(state.type) || !available[state.type].length) state.type = firstAvailable || 'week';
+
+  function selectedValue(type) {
+    const list = available[type];
+    const wanted = state.selected[type];
+    return list.some((o) => o.value === wanted) ? wanted : list.length ? list[0].value : null;
+  }
+
+  function currentSpec() {
+    const opts = { includeName: state.includeName };
+    const value = selectedValue(state.type);
+    if (value === null) return null;
+    if (state.type === 'week') return buildWeekSpec(getWeekRecap(new Date(value + 'T00:00:00')), getStreak(), profile, cfg, opts);
+    if (state.type === 'session') return buildSessionSpec(sessions[Number(value)], Number(value) + 1, profile, cfg, opts);
+    if (state.type === 'achievement') return buildAchievementSpec(value, profile, cfg, opts);
+    return buildProgressSpec(value, sessions, profile, cfg, opts);
+  }
+
+  // ---- Rendu
+  function renderControls() {
+    $('type-tabs').innerHTML = TYPE_ORDER.map(
+      (t) => `<button type="button" data-type="${t}" class="${t === state.type ? 'active' : ''}" aria-pressed="${t === state.type}" ${available[t].length ? '' : 'disabled style="opacity:.45;"'}>${STATUS_TYPES[t]}</button>`
+    ).join('');
+
+    const list = available[state.type];
+    $('source-row').style.display = list.length > 1 ? 'block' : 'none';
+    $('source-select').innerHTML = list.map((o) => `<option value="${o.value}">${o.label}</option>`).join('');
+    $('source-select').value = selectedValue(state.type) || '';
+
+    $('theme-chips').innerHTML = Object.entries(STATUS_THEMES)
+      .map(([k, th]) => `<button type="button" data-theme="${k}" class="${k === state.theme && !state.photo ? 'active' : ''}" aria-pressed="${k === state.theme && !state.photo}" ${state.photo ? 'disabled style="opacity:.45;"' : ''}>${th.label}</button>`)
+      .join('');
+    $('name-switch').checked = state.includeName;
+    $('photo-remove').style.display = state.photo ? 'block' : 'none';
+  }
+
+  let lastSpecKey = '';
+  function redraw() {
+    const spec = currentSpec();
+    const has = !!spec;
+    $('preview-box').style.display = has ? 'block' : 'none';
+    $('style-card').style.display = has ? 'block' : 'none';
+    ['post-btn', 'download-btn', 'caption-copy'].forEach((id) => ($(id).disabled = !has));
+    $('caption').disabled = !has;
+
+    if (!has) {
+      $('empty-note').style.display = 'block';
+      $('empty-note').textContent = sessions.length
+        ? 'Rien à afficher pour ce type pour le moment : essaie un autre onglet, ou reviens après quelques séances.'
+        : 'Fais ta première séance pour créer ta première carte !';
+      $('caption').value = '';
+      return;
+    }
+    $('empty-note').style.display = 'none';
+
+    const key = `${state.type}|${selectedValue(state.type)}|${cfg.appUrl}`;
+    if (key !== lastSpecKey || !state.captionEdited) {
+      $('caption').value = spec.caption;
+      state.captionEdited = false;
+      lastSpecKey = key;
+    }
+    drawStatusCard(preview, spec, { theme: state.theme, photo: state.photo });
+    preview.setAttribute('aria-label', 'Aperçu de la carte : ' + describeSpec(spec));
+    state.blob = null;
+    preview.toBlob((b) => (state.blob = b), STATUS_IMAGE.type, STATUS_IMAGE.quality);
+  }
+
+  function renderAll() {
+    renderControls();
+    redraw();
+  }
+
+  // ---- Interactions
+  $('type-tabs').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-type]');
+    if (!btn || btn.disabled) return;
+    state.type = btn.dataset.type;
+    renderAll();
+  });
+  $('source-select').addEventListener('change', (e) => {
+    state.selected[state.type] = e.target.value;
+    redraw();
+  });
+  $('theme-chips').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-theme]');
+    if (!btn || btn.disabled) return;
+    state.theme = btn.dataset.theme;
+    saveSettings({ ...getSettings(), shareTheme: state.theme });
+    renderAll();
+  });
+  $('name-switch').addEventListener('change', (e) => {
+    state.includeName = e.target.checked;
+    saveSettings({ ...getSettings(), shareShowName: state.includeName });
+    redraw();
+  });
+  $('caption').addEventListener('input', () => (state.captionEdited = true));
+
+  $('photo-input').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      state.photo = await loadPhotoCover(file);
+      $('post-status').textContent = '';
+    } catch (err) {
+      $('post-status').textContent = '❌ ' + (err.message || 'Photo impossible à charger.');
+      return;
+    }
+    renderAll();
+  });
+  $('photo-remove').addEventListener('click', () => {
+    state.photo = null;
+    renderAll();
+  });
+
+  async function copyCaption() {
+    const box = $('caption');
+    try {
+      await navigator.clipboard.writeText(box.value);
+      return true;
+    } catch (e) {
+      box.focus();
+      box.select();
+      return false;
+    }
+  }
+  $('caption-copy').addEventListener('click', async () => {
+    $('post-status').textContent = (await copyCaption()) ? '✔ Légende copiée.' : '⚠️ Copie automatique refusée : la légende est sélectionnée, copie-la à la main.';
+  });
+
+  function currentBlob() {
+    return state.blob ? Promise.resolve(state.blob) : new Promise((resolve) => preview.toBlob(resolve, STATUS_IMAGE.type, STATUS_IMAGE.quality));
+  }
+
+  $('post-btn').addEventListener('click', async () => {
+    const status = $('post-status');
+    try {
+      const result = await postToStatus(await currentBlob(), $('caption').value);
+      if (result.method === 'share') {
+        status.textContent = result.copied ? '✔ Légende copiée : colle-la dans ton Statut.' : '⚠️ Légende non copiée : touche « Copier la légende » avant de publier.';
+      } else {
+        status.textContent = `✔ Image téléchargée${result.copied ? ' et légende copiée' : ''}. Ajoute-la à ton Statut WhatsApp depuis ton téléphone.`;
+      }
+    } catch (e) {
+      status.textContent = e && e.name === 'AbortError' ? '' : 'Le partage a échoué : utilise « Télécharger l\'image ».';
+    }
+  });
+
+  $('download-btn').addEventListener('click', async () => {
+    downloadBlob(await currentBlob(), STATUS_IMAGE.filename);
+    $('post-status').textContent = '✔ Image téléchargée.';
+  });
+
+  $('back-btn').addEventListener('click', () => (history.length > 1 ? history.back() : (location.href = 'recap.html')));
+
+  renderAll();
+  loadCommunityConfig().then((c) => {
+    cfg = c;
+    redraw();
+  });
+</script>
+</body>
+</html>
