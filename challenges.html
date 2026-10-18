@@ -64,7 +64,9 @@
           .join('');
 
         let action;
-        if (!today) {
+        if (st.dayNumber < 1) {
+          action = `<p style="font-size:14px; margin:0 0 12px;">⏳ Ce défi commence le <strong>${formatDateFr(data.active[id].startDate)}</strong> (dans ${-st.dayNumber + 1} jour${-st.dayNumber + 1 > 1 ? 's' : ''}).</p>`;
+        } else if (!today) {
           action = '';
         } else if (today.rest) {
           action = '<p style="font-size:14px; margin:0 0 12px;">😌 Jour de repos : rien à faire aujourd’hui.</p>';
@@ -87,7 +89,7 @@
 
         return `<div class="card">
           <h2>${def.icon} ${def.name}</h2>
-          <p style="font-size:13px; color:var(--text-muted); margin:-6px 0 12px;">Jour ${Math.min(st.dayNumber, def.days)}/${def.days} · ${st.validated}/${st.required} jours validés</p>
+          <p style="font-size:13px; color:var(--text-muted); margin:-6px 0 12px;">${st.dayNumber < 1 ? `Départ le ${formatDateFr(data.active[id].startDate)}` : `Jour ${Math.min(st.dayNumber, def.days)}/${def.days} · ${st.validated}/${st.required} jours validés`}</p>
           ${action}
           <div class="calendar-grid" style="grid-template-columns: repeat(10, 1fr);">${cells}</div>
           <button class="btn btn-secondary" data-act="abandon" data-id="${id}" style="margin-top:12px; padding:8px; font-size:12px;">Abandonner ce défi</button>
@@ -132,6 +134,28 @@
     }
     render();
   });
+
+  // Défi synchronisé avec un groupe : challenges.html?defi=pompes30&debut=YYYY-MM-DD
+  (function handleInvite() {
+    const q = new URLSearchParams(location.search);
+    const id = q.get('defi');
+    if (!id || !CHALLENGES[id] || getChallengeData().active[id]) return;
+    const start = resolveChallengeStart(q.get('debut'));
+    const def = CHALLENGES[id];
+    const box = document.createElement('div');
+    box.className = 'card';
+    box.style.cssText = 'background:var(--primary-light); border:1.5px solid var(--primary);';
+    box.innerHTML = `<h2>${def.icon} Rejoindre le défi du groupe</h2>
+      <p style="font-size:14px; margin:-6px 0 12px; line-height:1.6;">${def.name} · ${start > todayISO() ? `départ le <strong>${formatDateFr(start)}</strong>` : start === todayISO() ? 'départ <strong>aujourd’hui</strong>' : `départ le <strong>${formatDateFr(start)}</strong> (déjà commencé)`}.</p>
+      <button class="btn btn-primary" id="join-challenge">Relever ce défi</button>`;
+    document.querySelector('.app-shell').insertBefore(box, document.getElementById('active-section'));
+    document.getElementById('join-challenge').addEventListener('click', () => {
+      startChallenge(id, q.get('debut'));
+      history.replaceState(null, '', 'challenges.html');
+      box.remove();
+      render();
+    });
+  })();
 
   render();
 </script>

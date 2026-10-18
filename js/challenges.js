@@ -95,10 +95,20 @@ function getChallengeStatus(id, entry, todayIso = todayISO()) {
   return { days, validated, required, dayNumber, finished: dayNumber > def.days };
 }
 
-function startChallenge(id) {
+// startIso : date de départ commune (défi synchronisé avec une cohorte). Futur accepté ; passé accepté
+// jusqu'à CHALLENGE_MAX_LATE_DAYS jours de retard, au-delà le défi démarre aujourd'hui pour ne pas pénaliser.
+const CHALLENGE_MAX_LATE_DAYS = 3;
+
+function resolveChallengeStart(startIso, todayIso = todayISO()) {
+  if (!isIsoDate(startIso)) return todayIso;
+  if (startIso >= todayIso) return startIso;
+  return daysBetween(startIso, todayIso) <= CHALLENGE_MAX_LATE_DAYS ? startIso : todayIso;
+}
+
+function startChallenge(id, startIso) {
   const data = getChallengeData();
   if (data.active[id]) return;
-  data.active[id] = { startDate: todayISO(), log: {} };
+  data.active[id] = { startDate: resolveChallengeStart(startIso), log: {} };
   saveChallengeData(data);
 }
 

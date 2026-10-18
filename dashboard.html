@@ -38,6 +38,21 @@
     </div>
   </div>
 
+  <div class="card" id="announce-card" style="display:none; border:1.5px solid var(--primary);">
+    <h2 id="announce-title">📣 Annonce</h2>
+    <p id="announce-text" style="font-size:14px; margin:0 0 12px; line-height:1.6;"></p>
+    <div style="display:flex; gap:8px;">
+      <a id="announce-link" class="btn btn-primary" target="_blank" rel="noopener" style="display:none; padding:10px; font-size:14px;"></a>
+      <button class="btn btn-secondary" id="announce-dismiss" style="padding:10px; font-size:14px;">Fermer</button>
+    </div>
+  </div>
+
+  <div class="card" id="cohort-card" style="display:none; background:var(--primary-light);">
+    <h2 id="cohort-title">👥 Ta cohorte</h2>
+    <p id="cohort-text" style="font-size:14px; margin:0 0 12px; line-height:1.6;"></p>
+    <a href="community.html" class="btn btn-primary" style="padding:10px; font-size:14px;">Ouvrir la communauté</a>
+  </div>
+
   <div class="card" id="backup-card" style="display:none; border:1.5px solid var(--primary);">
     <h2 id="backup-title">💾 Pense à sauvegarder tes données</h2>
     <p id="backup-text" style="font-size:13px; margin:0 0 12px; line-height:1.5;"></p>
@@ -87,6 +102,7 @@
       <a href="library.html" class="btn btn-secondary" style="width:auto; flex:1 1 45%;">📚 Exercices</a>
       <a href="recap.html" class="btn btn-secondary" style="width:auto; flex:1 1 45%;">📊 Bilan</a>
       <a href="challenges.html" class="btn btn-secondary" style="width:auto; flex:1 1 45%;">🎯 Défis</a>
+      <a href="community.html" class="btn btn-secondary" style="width:auto; flex:1 1 45%;">💬 Communauté</a>
       <a href="about.html" class="btn btn-secondary" style="width:auto; flex:1 1 45%;">ℹ️ À propos</a>
     </div>
   </div>
@@ -98,6 +114,7 @@
 <script src="js/exercises.js"></script>
 <script src="js/workouts.js"></script>
 <script src="js/challenges.js"></script>
+<script src="js/community.js"></script>
 <script src="js/timer.js"></script>
 <script src="js/app.js"></script>
 <script>
@@ -119,13 +136,48 @@
     });
   })();
 
+  loadCommunityConfig().then((cfg) => {
+    const todayIso = todayISO();
+    const p = getProfile();
+
+    // Compte à rebours avant le départ de la cohorte
+    if (p.cohort && p.startDate > todayIso) {
+      const n = daysBetween(todayIso, p.startDate);
+      document.getElementById('cohort-card').style.display = 'block';
+      document.getElementById('cohort-title').textContent = `👥 ${cohortLabel(p.cohort)}`;
+      document.getElementById('cohort-text').textContent = `Ton programme démarre ${n > 1 ? `dans ${n} jours` : 'demain'} (${formatDateFr(p.startDate)}). Prépare-toi : essaie une séance, installe l'application et rejoins le groupe WhatsApp.`;
+    } else if (!p.cohort && cfg.nextCohort && cfg.nextCohort.start >= todayIso) {
+      document.getElementById('cohort-card').style.display = 'block';
+      document.getElementById('cohort-title').textContent = `👥 ${cfg.nextCohort.label}`;
+      document.getElementById('cohort-text').textContent = `Démarrage le ${formatDateFr(cfg.nextCohort.start)} : avance avec un groupe pendant 12 semaines.`;
+    }
+
+    // Annonce de la communauté (communaute.json), fermable
+    const a = visibleAnnouncement(cfg, getSettings().dismissedAnnouncements || []);
+    if (a) {
+      document.getElementById('announce-card').style.display = 'block';
+      document.getElementById('announce-title').textContent = '📣 ' + a.title;
+      document.getElementById('announce-text').textContent = a.text;
+      if (a.linkUrl) {
+        const link = document.getElementById('announce-link');
+        link.href = a.linkUrl;
+        link.textContent = a.linkLabel;
+        link.style.display = 'flex';
+      }
+      document.getElementById('announce-dismiss').addEventListener('click', () => {
+        saveSettings({ ...getSettings(), dismissedAnnouncements: [...(getSettings().dismissedAnnouncements || []), a.id] });
+        document.getElementById('announce-card').style.display = 'none';
+      });
+    }
+  });
+
   finalizeChallenges();
   const profile = getProfile();
   const progress = getProgramProgress();
   const today = getTodayWorkout(profile);
 
   document.getElementById('greeting').textContent = `Bonjour ${profile.name} 👋`;
-  document.getElementById('week-badge').textContent = `Semaine ${progress.week}/${progress.totalWeeks}` + (progress.cycle > 1 ? ` · Cycle ${progress.cycle}` : '');
+  document.getElementById('week-badge').textContent = `Semaine ${progress.week}/${progress.totalWeeks}` + (progress.cycle > 1 ? ` · Cycle ${progress.cycle}` : '') + (progress.notStarted ? ' · départ bientôt' : '');
   document.getElementById('motivation-text').textContent = getMotivationalMessage(progress.dayNumber);
   document.getElementById('hero-progress').style.width = progress.percent + '%';
   document.getElementById('stat-sessions').textContent = `${progress.sessionsCompleted}/${progress.totalProgramSessions}`;

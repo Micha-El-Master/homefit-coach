@@ -11,6 +11,7 @@ Application web (HTML / CSS / JavaScript, sans serveur) pour suivre un programme
 - Bibliothèque d'exercices avec photos, bilan de la semaine, coach à règles (10 situations, conseil selon tes données)
 - Nutrition : besoins, menus sur 7 jours (classique, végétarien, sans lactose), eau, liste de courses ; routine Kegel
 - Rappels via un fichier agenda (.ics), transfert des données entre appareils (code ou fichier), rappel de sauvegarde
+- Communauté WhatsApp : lien de cohorte (`?cohorte=AAAA-MM-JJ`), annonces via `communaute.json`, défis synchronisés, partage du bilan en message ou en image
 - Hors-ligne (PWA), thème automatique, taille de texte réglable, animations réductibles, page À propos
 
 ## Lancer en local

@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Communauté — HomeFit Coach</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<meta name="theme-color" content="#d4361a" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="app-shell" role="main">
+  <div class="topbar">
+    <h1>💬 Communauté</h1>
+    <div class="topbar-actions">
+      <a href="dashboard.html" class="icon-btn" aria-label="Retour à l'accueil" title="Retour à l'accueil">🏠</a>
+    </div>
+  </div>
+  <p style="font-size:14px; line-height:1.6; margin:-8px 0 16px;">Avancer à plusieurs, c'est tenir plus longtemps. Rejoins une <strong>cohorte</strong> : tout le monde démarre le même lundi et suit le même rythme pendant 12 semaines.</p>
+
+  <div class="card" id="cohort-card"></div>
+
+  <div class="card">
+    <h2>📲 Rejoindre sur WhatsApp</h2>
+    <p style="font-size:13px; color:var(--text-muted); margin:-6px 0 12px; line-height:1.5;">La <strong>Chaîne</strong> diffuse les annonces et les astuces (personne ne voit ton numéro). La <strong>Communauté</strong> réunit les groupes de cohorte : <strong>ton numéro y est visible des autres membres</strong>.</p>
+    <a id="link-channel" class="btn btn-primary" target="_blank" rel="noopener" style="margin-bottom:10px;">📣 Suivre la Chaîne</a>
+    <a id="link-community" class="btn btn-secondary" target="_blank" rel="noopener">👥 Rejoindre la Communauté</a>
+    <p id="links-soon" style="display:none; font-size:13px; color:var(--text-muted); margin:12px 0 0;">Les liens WhatsApp seront publiés ici très bientôt.</p>
+  </div>
+
+  <div class="card" id="challenge-card" style="display:none;"></div>
+
+  <div class="card">
+    <h2>🤝 Inviter un ami</h2>
+    <p style="font-size:13px; color:var(--text-muted); margin:-6px 0 12px; line-height:1.5;">Ouvre WhatsApp avec un message prêt à envoyer. Rien n'est envoyé sans ton action.</p>
+    <a id="invite-wa" class="btn btn-primary" target="_blank" rel="noopener" style="margin-bottom:10px;">Envoyer sur WhatsApp</a>
+    <button id="invite-copy" class="btn btn-secondary">📋 Copier le message</button>
+    <p id="invite-status" role="status" style="font-size:13px; margin:10px 0 0; display:none;"></p>
+  </div>
+
+  <div class="card">
+    <h2>📊 Partager ma progression</h2>
+    <p style="font-size:13px; color:var(--text-muted); margin:-6px 0 12px; line-height:1.5;">Depuis ton bilan, partage un message ou une image récapitulative : seulement des totaux, jamais ton poids ni tes données de santé.</p>
+    <a href="recap.html" class="btn btn-secondary">Aller à mon bilan</a>
+  </div>
+
+  <div class="card">
+    <h2>📜 Règles du groupe</h2>
+    <ul style="font-size:14px; line-height:1.7; padding-left:18px; margin:0; list-style:disc;">
+      <li><strong>Bienveillance</strong> : on encourage, on ne compare pas, aucune moquerie sur le corps.</li>
+      <li><strong>Pas de conseil médical</strong> : en cas de douleur ou de blessure, consulte un professionnel de santé.</li>
+      <li><strong>Vie privée</strong> : ne partage ni poids, ni photo du corps de quelqu'un d'autre ; les captures d'écran restent dans le groupe.</li>
+      <li><strong>Pas de spam</strong> : pas de vente de compléments, de publicité ni de messages en chaîne.</li>
+      <li><strong>Respect du rythme de chacun</strong> : un jour manqué n'est pas un échec, on repart.</li>
+    </ul>
+  </div>
+</div>
+
+<nav class="bottom-nav" id="bottom-nav" aria-label="Navigation principale"></nav>
+
+<script src="js/storage.js"></script>
+<script src="js/community.js"></script>
+<script src="js/app.js"></script>
+<script>
+  const profile = getProfile();
+  const params = new URLSearchParams(location.search);
+  const invited = parseCohortParam(params.get('cohorte'));
+
+  function esc(text) {
+    const d = document.createElement('div');
+    d.textContent = text;
+    return d.innerHTML;
+  }
+
+  function setLink(id, url) {
+    const a = document.getElementById(id);
+    if (url) {
+      a.href = url;
+      return true;
+    }
+    a.style.display = 'none';
+    return false;
+  }
+
+  function renderCohort(cfg) {
+    const card = document.getElementById('cohort-card');
+    const todayIso = todayISO();
+    const candidate = invited ? invited.date : cfg.nextCohort ? cfg.nextCohort.start : null;
+    const label = cfg.nextCohort && cfg.nextCohort.start === candidate ? cfg.nextCohort.label : null;
+
+    if (profile.cohort) {
+      const started = profile.startDate <= todayIso;
+      card.innerHTML = `<h2>👥 ${esc(cohortLabel(profile.cohort))}</h2>
+        <p style="font-size:14px; margin:0; line-height:1.6;">${
+          started
+            ? `Ton programme est en cours. Retrouve ta cohorte sur WhatsApp et poste ton bilan chaque dimanche.`
+            : `Ton programme démarre le <strong>${esc(formatDateFr(profile.startDate))}</strong>, dans ${daysBetween(todayIso, profile.startDate)} jour${daysBetween(todayIso, profile.startDate) > 1 ? 's' : ''}.`
+        }</p>`;
+      return;
+    }
+
+    if (!candidate) {
+      card.innerHTML = '<h2>👥 Prochaine cohorte</h2><p style="font-size:14px; margin:0;">Aucune cohorte annoncée pour l’instant. Reviens bientôt, ou suis la Chaîne pour être prévenu.</p>';
+      return;
+    }
+
+    const days = daysBetween(todayIso, candidate);
+    const seats = cfg.nextCohort && cfg.nextCohort.start === candidate && cfg.nextCohort.seats ? ` · ${cfg.nextCohort.seats} places` : '';
+    card.innerHTML = `<h2>👥 ${esc(label || cohortLabel(candidate))}</h2>
+      <p style="font-size:14px; margin:0 0 12px; line-height:1.6;">Démarrage le <strong>${esc(formatDateFr(candidate))}</strong>${days > 0 ? ` (dans ${days} jour${days > 1 ? 's' : ''})` : ' (déjà commencée, tu peux la rejoindre en cours de route)'}${esc(seats)}.</p>
+      <button class="btn btn-primary" id="join-btn">Rejoindre cette cohorte</button>
+      <p style="font-size:12px; color:var(--text-muted); margin:10px 0 0; line-height:1.5;">Ton programme de 12 semaines démarre à cette date (ou aujourd'hui si elle est passée). Ta série hebdomadaire est conservée.</p>`;
+    document.getElementById('join-btn').addEventListener('click', () => {
+      if (!confirm(`Démarrer un nouveau cycle de 12 semaines avec la ${cohortLabel(candidate).toLowerCase()} ? Ton cycle actuel sera terminé.`)) return;
+      joinCohort(candidate);
+      location.href = 'dashboard.html';
+    });
+  }
+
+  function renderChallenge(cfg) {
+    const w = currentWeeklyChallenge(cfg);
+    if (!w) return;
+    const card = document.getElementById('challenge-card');
+    card.style.display = 'block';
+    card.innerHTML = `<h2>🎯 ${esc(w.title)}</h2>
+      ${w.text ? `<p style="font-size:14px; margin:-6px 0 12px; line-height:1.6;">${esc(w.text)}</p>` : ''}
+      ${w.challengeId ? `<a class="btn btn-outline" href="challenges.html?defi=${encodeURIComponent(w.challengeId)}&debut=${w.from}">Relever ce défi</a>` : ''}`;
+  }
+
+  function renderInvite(cfg) {
+    const text = buildInviteText(cfg, profile);
+    document.getElementById('invite-wa').href = whatsappShareLink(text);
+    document.getElementById('invite-copy').addEventListener('click', async () => {
+      const status = document.getElementById('invite-status');
+      status.style.display = 'block';
+      try {
+        await navigator.clipboard.writeText(text);
+        status.textContent = '✔ Message copié.';
+      } catch (e) {
+        status.textContent = 'Copie impossible : ' + text;
+      }
+    });
+  }
+
+  loadCommunityConfig().then((cfg) => {
+    renderCohort(cfg);
+    const hasChannel = setLink('link-channel', cfg.links.channel);
+    const hasCommunity = setLink('link-community', cfg.links.community);
+    if (!hasChannel && !hasCommunity) document.getElementById('links-soon').style.display = 'block';
+    renderChallenge(cfg);
+    renderInvite(cfg);
+  });
+</script>
+</body>
+</html>

@@ -17,6 +17,11 @@
     <p style="color:var(--text-muted); margin:0 0 24px; font-size:14px;">Ton coach à domicile, sans salle de sport.</p>
   </div>
 
+  <div class="card" id="cohort-banner" style="display:none; background:var(--primary-light); border:1.5px solid var(--primary);">
+    <strong id="cohort-banner-title"></strong>
+    <p id="cohort-banner-text" style="font-size:13px; margin:6px 0 0; line-height:1.5;"></p>
+  </div>
+
   <form id="onboarding-form" novalidate>
     <div class="form-group">
       <label for="name">Ton prénom</label>
@@ -81,10 +86,22 @@
 
 <script src="js/storage.js"></script>
 <script src="js/exercises.js"></script>
+<script src="js/community.js"></script>
 <script src="js/app.js"></script>
 <script>
+  // Lien d'invitation de cohorte : index.html?cohorte=YYYY-MM-DD
+  const cohort = parseCohortParam(new URLSearchParams(location.search).get('cohorte'));
+
   if (hasProfile()) {
-    location.href = 'dashboard.html';
+    location.href = cohort ? `community.html?cohorte=${cohort.date}` : 'dashboard.html';
+  }
+
+  if (cohort) {
+    document.getElementById('cohort-banner').style.display = 'block';
+    document.getElementById('cohort-banner-title').textContent = `🎉 Tu rejoins la ${cohortLabel(cohort.date).toLowerCase()}`;
+    document.getElementById('cohort-banner-text').textContent = cohort.future
+      ? `Ton programme démarrera le ${formatDateFr(cohort.date)}, en même temps que tout le groupe. Tu peux déjà tout configurer.`
+      : `Cette cohorte a déjà commencé : ton programme démarre aujourd'hui, et tu avances à ton rythme avec le groupe.`;
   }
 
   let selectedGoal = null;
@@ -165,6 +182,10 @@
     }
 
     const profile = { name, goal: selectedGoal, level: selectedLevel, startDate: todayISO() };
+    if (cohort) {
+      profile.cohort = cohort.date;
+      if (cohort.future) profile.startDate = cohort.date;
+    }
 
     const weight = Number(document.getElementById('b-weight').value);
     const height = Number(document.getElementById('b-height').value);

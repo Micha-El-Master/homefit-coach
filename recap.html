@@ -47,6 +47,18 @@
     <div id="r-top"></div>
   </div>
 
+  <div class="card">
+    <h2>📲 Partager mon bilan</h2>
+    <p style="font-size:13px; color:var(--text-muted); margin:-6px 0 12px; line-height:1.5;">Seulement des totaux : séances, minutes, répétitions, série. Aucun poids ni détail de santé.</p>
+    <a id="share-wa" class="btn btn-primary" target="_blank" rel="noopener" style="margin-bottom:10px;">Envoyer sur WhatsApp</a>
+    <button class="btn btn-secondary" id="card-btn">🖼️ Créer une carte à partager</button>
+    <div id="card-box" style="display:none; margin-top:14px; text-align:center;">
+      <img id="card-preview" alt="Aperçu de la carte de progression" style="width:100%; max-width:320px; border-radius:16px; box-shadow:var(--shadow);" />
+      <button class="btn btn-primary" id="card-share" style="margin-top:12px;">Partager l'image</button>
+      <p id="card-status" role="status" style="font-size:13px; margin:10px 0 0;"></p>
+    </div>
+  </div>
+
   <div class="card" style="background:var(--primary-light);">
     <h2>💡 Conseil pour la suite</h2>
     <p id="r-tip" style="font-size:14px; line-height:1.6; margin:0;"></p>
@@ -58,12 +70,20 @@
 <script src="js/storage.js"></script>
 <script src="js/exercises.js"></script>
 <script src="js/recap.js"></script>
+<script src="js/community.js"></script>
+<script src="js/sharecard.js"></script>
 <script src="js/app.js"></script>
 <script>
   const currentMonday = mondayOf(new Date());
   const profile = getProfile();
   const firstMonday = mondayOf(new Date((profile.streakStart || profile.startDate) + 'T00:00:00'));
   let monday = new Date(currentMonday);
+  let currentRecap = null;
+  let communityConfig = sanitizeCommunityConfig(null);
+  loadCommunityConfig().then((cfg) => {
+    communityConfig = cfg;
+    render();
+  });
 
   const fmt = (d) => d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 
@@ -100,6 +120,11 @@
       .map((t) => `<div class="history-item"><span>${t.name}</span><span>${t.total} ${t.unit}</span></div>`)
       .join('');
     document.getElementById('r-tip').textContent = getWeekTip(recap, isCurrent);
+
+    // Partage : message WhatsApp et carte image pour la semaine affichée
+    currentRecap = recap;
+    document.getElementById('share-wa').href = whatsappShareLink(buildRecapShareText(recap, getStreak(), communityConfig, profile));
+    document.getElementById('card-box').style.display = 'none';
   }
 
   document.getElementById('week-prev').addEventListener('click', () => {
@@ -110,6 +135,23 @@
     monday.setDate(monday.getDate() + 7);
     render();
   });
+  document.getElementById('card-btn').addEventListener('click', () => {
+    const data = buildShareCardData(currentRecap, getStreak(), profile, communityConfig);
+    const canvas = document.createElement('canvas');
+    drawShareCard(canvas, data);
+    document.getElementById('card-preview').src = canvas.toDataURL('image/png');
+    document.getElementById('card-box').style.display = 'block';
+    document.getElementById('card-share').onclick = async () => {
+      const status = document.getElementById('card-status');
+      try {
+        const result = await shareCardImage(data, buildRecapShareText(currentRecap, getStreak(), communityConfig, profile));
+        status.textContent = result === 'shared' ? '✔ Partagé.' : '✔ Image téléchargée : ajoute-la à ton message ou à ton Statut WhatsApp.';
+      } catch (e) {
+        status.textContent = e && e.name === 'AbortError' ? '' : 'Partage impossible sur cet appareil.';
+      }
+    };
+  });
+
   render();
 </script>
 </body>

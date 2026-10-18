@@ -80,6 +80,7 @@ function getSettings() {
     diet: 'omnivore',
     lastBackupAt: null,
     backupSnoozeUntil: null,
+    dismissedAnnouncements: [],
     voice: false,
     warmup: true,
     cooldown: true,
@@ -202,6 +203,23 @@ function todayISO() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+// Vrai seulement pour une date AAAA-MM-JJ qui existe (refuse 2026-02-31, que Date.parse accepte).
+function isIsoDate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [y, m, d] = value.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  return date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d;
+}
+
+// « lundi 2 novembre »
+function formatDateFr(iso, withWeekday = true) {
+  return new Date(iso + 'T00:00:00').toLocaleDateString('fr-FR', {
+    ...(withWeekday ? { weekday: 'long' } : {}),
+    day: 'numeric',
+    month: 'long',
+  });
+}
+
 function daysBetween(isoA, isoB) {
   const a = new Date(isoA + 'T00:00:00');
   const b = new Date(isoB + 'T00:00:00');
@@ -213,7 +231,8 @@ function daysBetween(isoA, isoB) {
 function getProgramProgress() {
   const profile = getProfile();
   if (!profile) return null;
-  const rawDay = Math.max(1, daysBetween(profile.startDate, todayISO()) + 1);
+  const offset = daysBetween(profile.startDate, todayISO());
+  const rawDay = Math.max(1, offset + 1);
   const week = Math.min(TOTAL_WEEKS, Math.ceil(rawDay / 7));
   const allSessions = getSessionLog();
   const cycleSessions = allSessions.filter((s) => s.date >= profile.startDate);
@@ -234,7 +253,22 @@ function getProgramProgress() {
     cycle: profile.cycle || 1,
     mode: profile.mode || 'standard',
     finished: rawDay > TOTAL_WEEKS * 7 || sessionsCompleted >= total,
+    // Programme qui démarre plus tard (cohorte à venir) : nombre de jours avant le départ.
+    notStarted: offset < 0,
+    startsInDays: offset < 0 ? -offset : 0,
   };
+}
+
+// Rejoindre une cohorte : le programme démarre à la date de la cohorte (ou aujourd'hui si elle a déjà commencé,
+// pour ne pas pénaliser un arrivant en retard). La série hebdomadaire d'origine est conservée.
+function joinCohort(dateIso, todayIso = todayISO()) {
+  const profile = getProfile();
+  profile.streakStart = profile.streakStart || profile.startDate;
+  profile.startDate = dateIso >= todayIso ? dateIso : todayIso;
+  profile.cycle = (profile.cycle || 1) + 1;
+  profile.mode = 'standard';
+  profile.cohort = dateIso;
+  saveProfile(profile);
 }
 
 function startNextCycle(mode) {
