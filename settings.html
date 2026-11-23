@@ -32,7 +32,7 @@
     <div class="settings-row">
       <div>
         <label class="row-label" for="level-select">Niveau</label>
-        <div class="row-desc">Ajuste les répétitions</div>
+        <div class="row-desc" id="level-desc">Ajuste les répétitions</div>
       </div>
       <select class="form-select" id="level-select" style="width:150px;">
         <option value="debutant">Débutant</option>
@@ -260,7 +260,19 @@
   goalSelect.value = profile0.goal;
   levelSelect.value = profile0.level;
   goalSelect.addEventListener('change', () => saveProfile({ ...getProfile(), goal: goalSelect.value }));
-  levelSelect.addEventListener('change', () => saveProfile({ ...getProfile(), level: levelSelect.value }));
+  function renderLevelDesc() {
+    const p = getProfile();
+    document.getElementById('level-desc').innerHTML = p.levelScore
+      ? `Niveau ${p.levelScore} sur 10 (test de départ) · <a href="test.html" style="text-decoration:underline;">Refaire le test</a>`
+      : `Ajuste les répétitions · <a href="test.html" style="text-decoration:underline;">Faire le test de niveau</a>`;
+  }
+  renderLevelDesc();
+  // Choisir un niveau à la main remplace le résultat du test.
+  levelSelect.addEventListener('change', () => {
+    const { levelScore, levelTests, ...rest } = getProfile();
+    saveProfile({ ...rest, level: levelSelect.value });
+    renderLevelDesc();
+  });
 
   function renderEquipment() {
     const owned = getSettings().equipment;
