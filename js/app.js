@@ -134,6 +134,8 @@ function registerServiceWorker() {
 }
 
 function levelLabel(level) {
+  const profile = typeof getProfile === 'function' ? getProfile() : null;
+  if (profile && profile.levelScore && profile.level === level) return `Niveau ${profile.levelScore}/10`;
   return { debutant: 'Débutant', intermediaire: 'Intermédiaire', avance: 'Avancé' }[level] || level;
 }
 

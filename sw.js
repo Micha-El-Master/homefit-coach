@@ -1,4 +1,4 @@
-const CACHE_NAME = 'homefit-coach-v15';
+const CACHE_NAME = 'homefit-coach-v16';
 const ASSETS = [
   'index.html',
   'dashboard.html',
@@ -17,6 +17,7 @@ const ASSETS = [
   'js/illustrations.js',
   'coach.html',
   'settings.html',
+  'test.html',
   'library.html',
   'recap.html',
   'js/recap.js',

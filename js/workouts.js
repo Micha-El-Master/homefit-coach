@@ -1,6 +1,69 @@
 
 const LEVEL_FACTOR = { debutant: 0.8, intermediaire: 1, avance: 1.2 };
 
+// Niveau chiffré de 1 à 10, issu du test de départ : 3 mini-tests (squats en 60 s, pompes sur les genoux
+// en une série, gainage en secondes), chacun noté de 1 à 10 ; le niveau global est la moyenne arrondie.
+const LEVEL_MIN = 1;
+const LEVEL_MAX = 10;
+const LEVEL_TESTS = [
+  { id: 'squats', label: 'Squats en 60 s', unit: 'répétitions', divisor: 5, max: 60 },
+  { id: 'pompes', label: 'Pompes sur les genoux', unit: 'répétitions', divisor: 3.5, max: 60 },
+  { id: 'gainage', label: 'Gainage sur les avant-bras', unit: 'secondes', divisor: 10, max: 180 },
+];
+
+function clampLevel(n) {
+  return Math.min(LEVEL_MAX, Math.max(LEVEL_MIN, Math.round(n)));
+}
+
+function scoreLevelTest(testId, value) {
+  const test = LEVEL_TESTS.find((t) => t.id === testId);
+  const v = Number(value);
+  if (!test || !Number.isFinite(v) || v < 0) return LEVEL_MIN;
+  return clampLevel(Math.min(v, test.max) / test.divisor);
+}
+
+// results : { squats, pompes, gainage } -> { score, scores: { squats, pompes, gainage } }
+function computeLevelFromTests(results) {
+  const scores = {};
+  LEVEL_TESTS.forEach((t) => {
+    scores[t.id] = scoreLevelTest(t.id, results[t.id]);
+  });
+  const mean = LEVEL_TESTS.reduce((sum, t) => sum + scores[t.id], 0) / LEVEL_TESTS.length;
+  return { score: clampLevel(mean), scores };
+}
+
+// Les 10 niveaux vont de 0,60 (on commence tout petit) à 1,23 du volume de base.
+function levelScoreFactor(score) {
+  return 0.6 + 0.07 * (clampLevel(score) - 1);
+}
+
+// Rattache l'ancien niveau texte à un niveau chiffré (affichage, test refait plus tard).
+function levelFromScore(score) {
+  const s = clampLevel(score);
+  return s <= 4 ? 'debutant' : s <= 7 ? 'intermediaire' : 'avance';
+}
+
+function levelNameFromScore(score) {
+  const s = clampLevel(score);
+  return s <= 4 ? 'Débutant' : s <= 7 ? 'Intermédiaire' : 'Avancé';
+}
+
+// Facteur de répétitions : un nombre (1 à 10) ou l'ancien niveau texte.
+function getLevelFactor(level) {
+  if (typeof level === 'number') return levelScoreFactor(level);
+  return LEVEL_FACTOR[level] || 1;
+}
+
+// Parcours de 12 semaines pour un niveau chiffré : un point par semaine (semaines 4 et 8 allégées).
+function getLevelCurve(score, totalWeeks = TOTAL_WEEKS) {
+  const base = levelScoreFactor(score);
+  const weeks = [];
+  for (let w = 1; w <= totalWeeks; w++) {
+    weeks.push({ week: w, factor: base * getProgressionFactor(w), deload: DELOAD_WEEKS.includes(w) });
+  }
+  return weeks;
+}
+
 const WEEK_PROGRAM = [
   { type: 'repos', title: 'Repos' },
   {
@@ -126,7 +189,7 @@ function getProgressionFactor(week) {
 // mode : 'standard', 'phase2' (+20 % sur tout le cycle) ou 'maintenance' (niveau constant, sans semaines allégées).
 function scaleExercise(exercise, level, week = 1, feeling = null, mode = 'standard') {
   const progression = mode === 'maintenance' ? 1 : getProgressionFactor(week);
-  const factor = (LEVEL_FACTOR[level] || 1) * progression * (mode === 'phase2' ? 1.2 : 1) * (FEELING_FACTOR[feeling] || 1);
+  const factor = getLevelFactor(level) * progression * (mode === 'phase2' ? 1.2 : 1) * (FEELING_FACTOR[feeling] || 1);
   const delta = getAdjustments()[exercise.id] || 0;
   const phase = getWeekPhase(week, mode);
   const extraSet = mode !== 'maintenance' && week >= 9 && !phase.deload && exercise.sets === 3 ? 1 : 0;
@@ -229,7 +292,7 @@ function getRecoveryWorkout() {
 function getTodayWorkout(profile, title) {
   if (title === RECOVERY_TITLE) return getRecoveryWorkout();
   const day = SESSION_CYCLE.find((s) => s.title === (title || getNextSessionTitle())) || SESSION_CYCLE[0];
-  const level = profile ? profile.level : 'intermediaire';
+  const level = profile ? (profile.levelScore || profile.level) : 'intermediaire';
   const goal = profile ? profile.goal : 'forme';
   const progress = getProgramProgress();
   const week = progress ? progress.week : 1;

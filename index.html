@@ -41,6 +41,7 @@
     <fieldset class="form-group" style="border:none; padding:0; margin:0 0 16px;">
       <legend style="font-weight:600; margin-bottom:6px; font-size:14px; padding:0;">Ton niveau</legend>
       <div class="option-grid" id="level-options" role="radiogroup" aria-label="Ton niveau">
+        <button type="button" class="option-card" role="radio" aria-checked="false" data-value="test" style="grid-column: 1 / -1;">🎯 Faire le test de niveau (recommandé, 2 min)</button>
         <button type="button" class="option-card" role="radio" aria-checked="false" data-value="debutant">🌱 Débutant</button>
         <button type="button" class="option-card" role="radio" aria-checked="false" data-value="intermediaire">🚀 Intermédiaire</button>
         <button type="button" class="option-card" role="radio" aria-checked="false" data-value="avance">🏆 Avancé</button>
@@ -181,7 +182,9 @@
       return;
     }
 
-    const profile = { name, goal: selectedGoal, level: selectedLevel, startDate: todayISO() };
+    const wantsTest = selectedLevel === 'test';
+    // Niveau provisoire « débutant » tant que le test n'est pas terminé : on commence tout petit.
+    const profile = { name, goal: selectedGoal, level: wantsTest ? 'debutant' : selectedLevel, startDate: todayISO() };
     if (cohort) {
       profile.cohort = cohort.date;
       if (cohort.future) profile.startDate = cohort.date;
@@ -206,7 +209,7 @@
 
     saveProfile(profile);
     saveSettings({ ...getSettings(), trainingDays: trainingDays.slice().sort((a, b) => a - b), equipment: [...equipment] });
-    location.href = 'dashboard.html';
+    location.href = wantsTest ? 'test.html?onboarding=1' : 'dashboard.html';
   });
 </script>
 </body>
