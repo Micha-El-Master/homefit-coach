@@ -53,6 +53,12 @@
     <a href="community.html" class="btn btn-primary" style="padding:10px; font-size:14px;">Ouvrir la communauté</a>
   </div>
 
+  <div class="card" id="fast-card" style="display:none; background:var(--surface-2);">
+    <h2 id="fast-title">🌿 Jeûne communautaire</h2>
+    <p id="fast-text" style="font-size:14px; margin:0 0 12px; line-height:1.6;"></p>
+    <a href="jeune.html" class="btn btn-secondary" id="fast-link" style="padding:10px; font-size:14px;">Voir le calendrier</a>
+  </div>
+
   <div class="card" id="backup-card" style="display:none; border:1.5px solid var(--primary);">
     <h2 id="backup-title">💾 Pense à sauvegarder tes données</h2>
     <p id="backup-text" style="font-size:13px; margin:0 0 12px; line-height:1.5;"></p>
@@ -103,6 +109,7 @@
       <a href="recap.html" class="btn btn-secondary" style="width:auto; flex:1 1 45%;">📊 Bilan</a>
       <a href="challenges.html" class="btn btn-secondary" style="width:auto; flex:1 1 45%;">🎯 Défis</a>
       <a href="community.html" class="btn btn-secondary" style="width:auto; flex:1 1 45%;">💬 Communauté</a>
+      <a href="jeune.html" class="btn btn-secondary" style="width:auto; flex:1 1 45%;">🌿 Jeûne</a>
       <a href="about.html" class="btn btn-secondary" style="width:auto; flex:1 1 45%;">ℹ️ À propos</a>
     </div>
   </div>
@@ -138,6 +145,32 @@
 
   loadCommunityConfig().then((cfg) => {
     const todayIso = todayISO();
+
+    // Jeûne communautaire : phase du jour, prochain jeûne choisi, ou jeûne annoncé à rejoindre
+    (function showFast() {
+      const card = document.getElementById('fast-card');
+      const title = document.getElementById('fast-title');
+      const text = document.getElementById('fast-text');
+      const phase = fastPhaseOn(todayIso);
+      const mine = getUpcomingFast(todayIso);
+      const announced = cfg.fasts.find((f) => addDaysISO(f.start, f.days - 1) >= todayIso && !getFasts().some((m) => m.start === f.start));
+      const range = (f) => `${formatDateFr(f.start)} au ${formatDateFr(addDaysISO(f.start, f.days - 1))}`;
+      if (phase && phase.phase !== 'fast') {
+        title.textContent = phase.phase === 'prep' ? '🌿 Veille du jeûne' : `🌿 Reprise · jour ${phase.day}`;
+        text.textContent = getFastNote(phase);
+      } else if (phase) {
+        title.textContent = `🌿 Jeûne en cours · jour ${phase.day} sur ${phase.days}`;
+        text.textContent = 'Bois régulièrement et reste à l’écoute de ton corps. Tu peux arrêter à tout moment.';
+      } else if (mine && daysBetween(todayIso, mine.start) <= 14) {
+        const n = daysBetween(todayIso, mine.start);
+        title.textContent = '🌿 Prochain jeûne';
+        text.textContent = `Du ${range(mine)} (${n > 1 ? `dans ${n} jours` : 'demain'}). Tes séances de ces jours-là sont remplacées par de la récupération douce.`;
+      } else if (announced && daysBetween(todayIso, announced.start) <= 21) {
+        title.textContent = '🌿 Jeûne communautaire annoncé';
+        text.textContent = `Du ${range(announced)}. Participer est un choix personnel : ouvre le calendrier pour en savoir plus.`;
+      } else return;
+      card.style.display = 'block';
+    })();
     const p = getProfile();
 
     // Compte à rebours avant le départ de la cohorte
@@ -215,7 +248,7 @@
   const isPaused = paused && Date.now() - paused.savedAt < 12 * 3600 * 1000;
 
   todaySubtitle.textContent = today.subtitle + (today.phase.label ? ` · ${today.phase.label}` : '');
-  todayDuration.textContent = `⏱️ ${minutes} min · 📅 Cette semaine : ${week.sessionsThisWeek}/${getWeeklyTarget()}`;
+  todayDuration.textContent = `⏱️ ${minutes} min · 📅 Cette semaine : ${week.sessionsThisWeek}/${week.targetSessionsPerWeek}`;
   todayCta.href = 'workout.html';
 
   if (todayPlan.done) {
@@ -223,6 +256,12 @@
     todaySubtitle.textContent = 'Bravo ! Tu peux enchaîner avec la prochaine séance si tu te sens en forme.';
     todayCta.textContent = 'Faire une séance bonus';
     todayCta.className = 'btn btn-secondary';
+  } else if (todayPlan.type === 'fast') {
+    todayTitle.textContent = `🌿 Jeûne · jour ${todayPlan.fastDay} sur ${todayPlan.fastDays}`;
+    todaySubtitle.textContent = getFastNote(fastPhaseOn(todayPlan.iso));
+    todayDuration.textContent = '😌 Tu peux aussi te reposer : ta série n’est pas pénalisée.';
+    todayCta.href = 'workout.html?s=' + encodeURIComponent(RECOVERY_TITLE);
+    todayCta.textContent = '🧘 Récupération douce (~8 min)';
   } else if (todayPlan.type === 'training') {
     todayTitle.textContent = todayPlan.rescue ? '🔁 Rattrapage : ' + today.title : `Aujourd'hui : ${today.title}`;
     if (todayPlan.rescue) todaySubtitle.textContent = 'Tu as raté une séance : celle-ci garde ta série. ' + todaySubtitle.textContent;
@@ -238,7 +277,7 @@
   const DAY_SHORT = { 1: 'Lun', 2: 'Mar', 3: 'Mer', 4: 'Jeu', 5: 'Ven', 6: 'Sam', 0: 'Dim' };
   document.getElementById('week-strip').innerHTML = plan.days
     .map((d) => {
-      const icon = d.beforeStart ? '·' : d.done ? '✅' : d.missed ? '❌' : d.rescue ? '🔁' : d.type === 'training' ? '🏋️' : '😌';
+      const icon = d.beforeStart ? '·' : d.done ? '✅' : d.missed ? '❌' : d.rescue ? '🔁' : d.type === 'fast' ? '🌿' : d.type === 'training' ? '🏋️' : '😌';
       const cls = ['wd', d.isToday ? 'today' : '', d.done ? 'done' : '', d.rescue && !d.done ? 'rescue' : ''].join(' ');
       return `<div class="${cls}">${DAY_SHORT[d.weekday]}<span class="ico">${icon}</span></div>`;
     })

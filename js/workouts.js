@@ -187,9 +187,9 @@ function getProgressionFactor(week) {
 }
 
 // mode : 'standard', 'phase2' (+20 % sur tout le cycle) ou 'maintenance' (niveau constant, sans semaines allégées).
-function scaleExercise(exercise, level, week = 1, feeling = null, mode = 'standard') {
+function scaleExercise(exercise, level, week = 1, feeling = null, mode = 'standard', volume = 1) {
   const progression = mode === 'maintenance' ? 1 : getProgressionFactor(week);
-  const factor = getLevelFactor(level) * progression * (mode === 'phase2' ? 1.2 : 1) * (FEELING_FACTOR[feeling] || 1);
+  const factor = getLevelFactor(level) * progression * (mode === 'phase2' ? 1.2 : 1) * (FEELING_FACTOR[feeling] || 1) * volume;
   const delta = getAdjustments()[exercise.id] || 0;
   const phase = getWeekPhase(week, mode);
   const extraSet = mode !== 'maintenance' && week >= 9 && !phase.deload && exercise.sets === 3 ? 1 : 0;
@@ -273,6 +273,14 @@ function applyEquipment(exercises, equipment) {
   return { exercises: out, replaced, dropped };
 }
 
+// Message selon la phase de jeûne du jour (null hors jeûne).
+function getFastNote(phase) {
+  if (!phase) return null;
+  if (phase.phase === 'fast') return `Jeûne, jour ${phase.day} sur ${phase.days} : pas d'effort intense. Arrête-toi, assieds-toi et bois si tu as un vertige, des palpitations ou des nausées.`;
+  if (phase.phase === 'refeed') return `Reprise après le jeûne, jour ${phase.day} : séance à ${Math.round(phase.factor * 100)} % du volume. Remonte en douceur.`;
+  return 'Veille du jeûne : dernière séance complète. Prévois un repas léger, de l\'eau, des tisanes et du bouillon.';
+}
+
 function getRecoveryWorkout() {
   return {
     type: 'training',
@@ -285,6 +293,7 @@ function getRecoveryWorkout() {
     feeling: null,
     goalNote: null,
     equipmentNote: null,
+    fastNote: getFastNote(fastPhaseOn(todayISO())),
     exercises: RECOVERY_ROUTINE.map((ex) => ({ ...ex })),
   };
 }
@@ -298,6 +307,8 @@ function getTodayWorkout(profile, title) {
   const week = progress ? progress.week : 1;
   const mode = progress ? progress.mode : 'standard';
   const feeling = getFeelingTrend();
+  const fastPhase = fastPhaseOn(todayISO());
+  const volume = fastPhase && fastPhase.phase === 'refeed' ? fastPhase.factor : 1;
   const equipped = applyEquipment(applyGoalVariant(day, goal), getSettings().equipment);
 
   let equipmentNote = null;
@@ -316,7 +327,8 @@ function getTodayWorkout(profile, title) {
     feeling,
     goalNote: GOAL_NOTES[goal] || null,
     equipmentNote,
-    exercises: equipped.exercises.map((ex) => scaleExercise(ex, level, week, feeling, mode)),
+    fastNote: getFastNote(fastPhase),
+    exercises: equipped.exercises.map((ex) => scaleExercise(ex, level, week, feeling, mode, volume)),
   };
 }
 

@@ -12,6 +12,7 @@ Application web (HTML / CSS / JavaScript, sans serveur) pour suivre un programme
 - Nutrition : besoins, menus sur 7 jours (classique, végétarien, sans lactose), eau, liste de courses ; routine Kegel
 - Rappels via un fichier agenda (.ics), transfert des données entre appareils (code ou fichier), rappel de sauvegarde
 - Communauté WhatsApp : lien de cohorte (`?cohorte=AAAA-MM-JJ`), annonces via `communaute.json`, défis synchronisés, cartes « Statut WhatsApp » (image 9:16 : bilan, séance, succès, progression ; 3 thèmes, prénom et photo de fond en option)
+- Jeûne communautaire (3 jours par mois, en général mer.-ven.) : calendrier du mois, jeûnes annoncés via `communaute.json` (`fasts`) ou ajoutés à la main, séances remplacées par de la récupération douce, reprise à 60 % puis 70 %, séances dispensées sans pénaliser la série
 - Hors-ligne (PWA), thème automatique, taille de texte réglable, animations réductibles, page À propos
 
 ## Lancer en local
