@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Jeûne communautaire — HomeFit Coach</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<meta name="theme-color" content="#d4361a" />
+<link rel="stylesheet" href="css/style.css" />
+<style>
+  .fast-hero { background: var(--primary); color: var(--on-primary); border-radius: var(--radius); padding: 18px; margin-bottom: 16px; }
+  .fast-hero h2 { margin: 0 0 4px; font-size: 18px; }
+  .fast-days { display: flex; gap: 8px; margin: 12px 0; }
+  .fast-days div { flex: 1; background: rgba(255,255,255,0.2); border-radius: 12px; padding: 10px 6px; text-align: center; font-size: 12px; }
+  .fast-days b { display: block; font-size: 22px; margin: 2px 0; }
+  .cal-head, .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; text-align: center; }
+  .cal-head { font-size: 12px; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; }
+  .cal-cell { height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; color: var(--text-muted); }
+  .cal-cell.today { outline: 2px solid var(--text); outline-offset: 1px; }
+  .cal-cell.fast { background: #17181c; color: #ffffff; }
+  .cal-cell.refeed { background: #dff5ee; color: #0b4f3e; }
+  .cal-cell.training { background: var(--primary-light); color: var(--primary-dark); }
+  .cal-cell.rest { background: var(--surface-2); }
+  .cal-cell.empty { visibility: hidden; }
+  .cal-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .cal-nav button { width: 44px; height: 44px; border-radius: 22px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 18px; cursor: pointer; font-family: inherit; }
+  .cal-legend { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; font-size: 13px; }
+  .cal-legend div { display: flex; align-items: center; gap: 10px; }
+  .cal-legend i { width: 16px; height: 16px; border-radius: 5px; flex-shrink: 0; }
+  .safe-card { background: var(--primary-light); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 16px; }
+  .safe-card strong { color: var(--primary-dark); }
+  .fast-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+  .fast-row:last-child { border-bottom: none; }
+  .fast-row button { background: none; border: none; color: var(--primary-dark); font-weight: 700; cursor: pointer; font-family: inherit; font-size: 14px; padding: 8px; }
+</style>
+</head>
+<body>
+<div class="app-shell" role="main">
+  <a href="dashboard.html" class="back-link">← Retour</a>
+  <h1 style="margin-top:0;">🌿 Jeûne communautaire</h1>
+  <p style="font-size:14px; line-height:1.6; margin:-8px 0 16px;">Un jeûne de 3 jours par mois, en général du mercredi au vendredi. Pendant ces jours, ton programme se met en pause : récupération douce, puis reprise progressive.</p>
+
+  <div class="safe-card">
+    <strong>Un choix personnel.</strong>
+    <span style="font-size:13px; line-height:1.5;"> En cas de maladie, de traitement, de diabète, de grossesse ou d’allaitement, demande l’avis de ton médecin avant. Tu peux arrêter à tout moment.</span>
+  </div>
+
+  <div id="next-fast"></div>
+
+  <div class="card">
+    <div class="cal-nav">
+      <button type="button" id="cal-prev" aria-label="Mois précédent">‹</button>
+      <h2 id="cal-title" style="margin:0; font-size:17px;"></h2>
+      <button type="button" id="cal-next" aria-label="Mois suivant">›</button>
+    </div>
+    <div class="cal-head" aria-hidden="true"><span>Lun</span><span>Mar</span><span>Mer</span><span>Jeu</span><span>Ven</span><span>Sam</span><span>Dim</span></div>
+    <div class="cal-grid" id="cal-grid"></div>
+    <div class="cal-legend">
+      <div><i style="background:#17181c"></i><span><b>Jeûne</b> : récupération douce uniquement</span></div>
+      <div><i style="background:#dff5ee"></i><span><b>Reprise</b> : séance à 60 % puis 70 %</span></div>
+      <div><i style="background:var(--primary-light)"></i><span><b>Séance</b> prévue</span></div>
+      <div><i style="background:var(--surface-2)"></i><span><b>Repos</b></span></div>
+    </div>
+    <p style="font-size:13px; color:var(--text-muted); line-height:1.5; margin:12px 0 0;">Les séances prévues pendant le jeûne sont dispensées : elles ne comptent pas dans l’objectif de la semaine, ta série n’est pas pénalisée.</p>
+  </div>
+
+  <div class="card">
+    <h2>Ma préparation</h2>
+    <ul style="margin:0; padding-left:20px; font-size:14px; line-height:1.8; list-style:disc;">
+      <li>La veille : dernier repas léger, sans alcool. C’est ta dernière séance complète.</li>
+      <li>Prévois de l’eau, des tisanes et du bouillon.</li>
+      <li>Pendant le jeûne : bois régulièrement, reste au calme, évite l’effort intense.</li>
+      <li>Reprise : repas légers, petites portions, mâchés lentement. Séance à 60 % puis 70 %, retour à 100 % ensuite.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>Mes jeûnes</h2>
+    <p style="font-size:13px; color:var(--text-muted); margin:-6px 0 12px; line-height:1.5;">Les jeûnes annoncés par la communauté apparaissent ci-dessus. Tu peux aussi ajouter tes propres dates.</p>
+    <div id="my-fasts"></div>
+    <div class="option-grid" style="margin:12px 0;">
+      <div class="form-group" style="margin:0;"><label for="fast-start">Premier jour</label><input class="form-input" type="date" id="fast-start" /></div>
+      <div class="form-group" style="margin:0;"><label for="fast-days">Durée</label>
+        <select class="form-select" id="fast-days">
+          <option value="1">1 jour</option><option value="2">2 jours</option><option value="3" selected>3 jours</option><option value="4">4 jours</option><option value="5">5 jours</option>
+        </select></div>
+    </div>
+    <p id="fast-error" role="alert" style="display:none; color:var(--danger); font-size:13px; font-weight:600; margin:0 0 10px;"></p>
+    <button type="button" class="btn btn-secondary" id="fast-add">Ajouter ce jeûne</button>
+  </div>
+</div>
+
+<nav class="bottom-nav" id="bottom-nav" aria-label="Navigation principale"></nav>
+
+<script src="js/storage.js"></script>
+<script src="js/exercises.js"></script>
+<script src="js/community.js"></script>
+<script src="js/app.js"></script>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const rangeLabel = (f) => `${formatDateFr(f.start)} au ${formatDateFr(addDaysISO(f.start, f.days - 1))}`;
+  let announced = [];
+  let view = new Date();
+  view.setDate(1);
+
+  function el(tag, props = {}, children = []) {
+    const node = document.createElement(tag);
+    Object.entries(props).forEach(([k, v]) => {
+      if (k === 'text') node.textContent = v;
+      else if (k === 'class') node.className = v;
+      else node.setAttribute(k, v);
+    });
+    children.forEach((c) => node.appendChild(c));
+    return node;
+  }
+
+  function renderNext() {
+    const box = $('next-fast');
+    box.textContent = '';
+    const todayIso = todayISO();
+    const mine = getUpcomingFast(todayIso);
+    const upcomingAnnounced = announced.filter((f) => addDaysISO(f.start, f.days - 1) >= todayIso);
+    const fast = mine || upcomingAnnounced[0];
+    if (!fast) {
+      box.appendChild(el('div', { class: 'card' }, [
+        el('h2', { text: 'Aucun jeûne prévu' }),
+        el('p', { text: 'Dès qu’un jeûne est annoncé par la communauté, il apparaît ici. Tu peux aussi ajouter tes dates plus bas.', style: 'font-size:14px; margin:0; line-height:1.5; color:var(--text-muted);' }),
+      ]));
+      return;
+    }
+    const joined = getFasts().some((f) => f.start === fast.start);
+    const offset = daysBetween(todayIso, fast.start);
+    const when = offset > 0 ? (offset === 1 ? 'Demain' : `Dans ${offset} jours`) : 'En cours';
+    const days = Array.from({ length: fast.days }, (_, i) => {
+      const iso = addDaysISO(fast.start, i);
+      const weekday = new Date(iso + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long' });
+      return el('div', {}, [el('span', { text: weekday.charAt(0).toUpperCase() + weekday.slice(1) }), el('b', { text: String(Number(iso.slice(8))) }), el('span', { text: `Jour ${i + 1}` })]);
+    });
+    const hero = el('div', { class: 'fast-hero' }, [
+      el('h2', { text: `Prochain jeûne de ${fast.days} jour${fast.days > 1 ? 's' : ''}` }),
+      el('div', { text: `${rangeLabel(fast)} · ${when}`, style: 'font-size:14px; font-weight:700;' }),
+      el('div', { class: 'fast-days' }, days),
+      el('div', { text: joined ? 'Tu participes : ton programme s’adapte automatiquement.' : 'Tu ne participes pas pour l’instant : ton programme ne change pas.', style: 'font-size:13px; line-height:1.4;' }),
+    ]);
+    box.appendChild(hero);
+
+    const actions = el('div', { style: 'display:flex; flex-direction:column; gap:10px; margin-bottom:16px;' });
+    const toggle = el('button', { type: 'button', class: joined ? 'btn btn-secondary' : 'btn btn-primary', text: joined ? 'Je ne jeûne pas cette fois' : 'Je participe à ce jeûne' });
+    toggle.addEventListener('click', () => {
+      if (joined) removeFast(fast.start);
+      else addFast(fast.start, fast.days);
+      refresh();
+    });
+    const ics = el('button', { type: 'button', class: 'btn btn-outline', text: 'Ajouter à mon agenda' });
+    ics.addEventListener('click', () => downloadBlob(new Blob([buildFastICS(fast)], { type: 'text/calendar;charset=utf-8' }), 'homefit-coach-jeune.ics'));
+    actions.appendChild(toggle);
+    actions.appendChild(ics);
+    box.appendChild(actions);
+  }
+
+  function renderCalendar() {
+    const year = view.getFullYear();
+    const month = view.getMonth();
+    $('cal-title').textContent = view.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+    const grid = $('cal-grid');
+    grid.textContent = '';
+    const first = new Date(year, month, 1);
+    const lead = (first.getDay() + 6) % 7;
+    const count = new Date(year, month + 1, 0).getDate();
+    const todayIso = todayISO();
+    const planned = getTrainingDays();
+    const profile = getProfile();
+    const startIso = profile ? profile.startDate : '0000-00-00';
+    for (let i = 0; i < lead; i++) grid.appendChild(el('div', { class: 'cal-cell empty' }));
+    for (let day = 1; day <= count; day++) {
+      const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const phase = fastPhaseOn(iso);
+      const weekday = new Date(year, month, day).getDay();
+      let cls = 'rest';
+      let label = 'repos';
+      if (phase && phase.phase === 'fast') { cls = 'fast'; label = 'jeûne'; }
+      else if (phase && phase.phase === 'refeed') { cls = 'refeed'; label = `reprise, séance à ${Math.round(phase.factor * 100)} %`; }
+      else if (planned.includes(weekday) && iso >= startIso) { cls = 'training'; label = 'séance prévue'; }
+      const cell = el('div', { class: `cal-cell ${cls}${iso === todayIso ? ' today' : ''}` });
+      cell.appendChild(el('span', { text: String(day), 'aria-hidden': 'true' }));
+      cell.appendChild(el('span', { class: 'sr-only', text: `${formatDateFr(iso)} : ${label}` }));
+      grid.appendChild(cell);
+    }
+  }
+
+  function renderMine() {
+    const box = $('my-fasts');
+    box.textContent = '';
+    const list = getFasts();
+    if (!list.length) {
+      box.appendChild(el('p', { text: 'Aucun jeûne enregistré.', style: 'font-size:14px; color:var(--text-muted); margin:0;' }));
+      return;
+    }
+    list.forEach((f) => {
+      const del = el('button', { type: 'button', text: 'Retirer', 'aria-label': `Retirer le jeûne du ${formatDateFr(f.start, false)}` });
+      del.addEventListener('click', () => {
+        removeFast(f.start);
+        refresh();
+      });
+      box.appendChild(el('div', { class: 'fast-row' }, [el('span', { text: `${rangeLabel(f)} (${f.days} j)` }), del]));
+    });
+  }
+
+  function refresh() {
+    renderNext();
+    renderCalendar();
+    renderMine();
+  }
+
+  $('cal-prev').addEventListener('click', () => {
+    view = new Date(view.getFullYear(), view.getMonth() - 1, 1);
+    renderCalendar();
+  });
+  $('cal-next').addEventListener('click', () => {
+    view = new Date(view.getFullYear(), view.getMonth() + 1, 1);
+    renderCalendar();
+  });
+
+  $('fast-add').addEventListener('click', () => {
+    const err = $('fast-error');
+    const start = $('fast-start').value;
+    const days = Number($('fast-days').value);
+    if (!isIsoDate(start) || start < todayISO()) {
+      err.textContent = 'Choisis une date de début à partir d’aujourd’hui.';
+      err.style.display = 'block';
+      return;
+    }
+    err.style.display = 'none';
+    addFast(start, days);
+    $('fast-start').value = '';
+    view = new Date(start + 'T12:00:00');
+    view.setDate(1);
+    refresh();
+  });
+
+  refresh();
+  loadCommunityConfig().then((cfg) => {
+    announced = cfg.fasts;
+    refresh();
+  });
+</script>
+</body>
+</html>

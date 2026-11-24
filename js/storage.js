@@ -81,6 +81,7 @@ function getSettings() {
     lastBackupAt: null,
     backupSnoozeUntil: null,
     dismissedAnnouncements: [],
+    fasts: [],
     voice: false,
     warmup: true,
     cooldown: true,
@@ -106,6 +107,71 @@ function getTrainingDays() {
 // L'objectif hebdomadaire est simplement le nombre de jours d'entraînement choisis.
 function getWeeklyTarget() {
   return getTrainingDays().length;
+}
+
+// Jeûne communautaire : liste de { start: 'AAAA-MM-JJ', days: 1 à 5 } choisie par l'utilisateur (réglages).
+// Pendant le jeûne : séances remplacées par de la récupération douce ; ensuite reprise progressive (60 %, 70 %).
+const FAST_REFEED_FACTORS = [0.6, 0.7];
+const FAST_MAX_DAYS = 5;
+
+function sanitizeFasts(list) {
+  if (!Array.isArray(list)) return [];
+  const seen = new Set();
+  return list
+    .filter((f) => f && isIsoDate(f.start) && Number.isInteger(f.days) && f.days >= 1 && f.days <= FAST_MAX_DAYS && !seen.has(f.start) && seen.add(f.start))
+    .map((f) => ({ start: f.start, days: f.days }))
+    .sort((a, b) => (a.start < b.start ? -1 : 1))
+    .slice(-24);
+}
+
+function getFasts() {
+  return sanitizeFasts(getSettings().fasts);
+}
+
+function addFast(start, days = 3) {
+  const fasts = sanitizeFasts([...getFasts().filter((f) => f.start !== start), { start, days }]);
+  saveSettings({ ...getSettings(), fasts });
+  return fasts;
+}
+
+function removeFast(start) {
+  saveSettings({ ...getSettings(), fasts: getFasts().filter((f) => f.start !== start) });
+}
+
+function addDaysISO(iso, n) {
+  const d = new Date(iso + 'T12:00:00');
+  d.setDate(d.getDate() + n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// Phase d'un jour par rapport aux jeûnes : 'prep' (veille), 'fast' (jour n sur N), 'refeed' (reprise, jour 1 ou 2), sinon null.
+function fastPhaseOn(iso, fasts = getFasts()) {
+  for (const f of fasts) {
+    const offset = daysBetween(f.start, iso);
+    if (offset === -1) return { phase: 'prep', fast: f, day: 0, days: f.days, factor: 1 };
+    if (offset >= 0 && offset < f.days) return { phase: 'fast', fast: f, day: offset + 1, days: f.days, factor: 0 };
+    const after = offset - f.days;
+    if (after >= 0 && after < FAST_REFEED_FACTORS.length) return { phase: 'refeed', fast: f, day: after + 1, days: f.days, factor: FAST_REFEED_FACTORS[after] };
+  }
+  return null;
+}
+
+// Prochain jeûne (en cours ou à venir) à partir d'aujourd'hui.
+function getUpcomingFast(todayIso = todayISO(), fasts = getFasts()) {
+  return fasts.find((f) => addDaysISO(f.start, f.days - 1) >= todayIso) || null;
+}
+
+// Objectif de séances d'une semaine (lun-dim) : les séances prévues un jour de jeûne sont dispensées.
+function getWeekTarget(mondayIso) {
+  const planned = getTrainingDays();
+  let excused = 0;
+  for (let i = 0; i < 7; i++) {
+    const iso = addDaysISO(mondayIso, i);
+    const weekday = new Date(iso + 'T12:00:00').getDay();
+    const phase = fastPhaseOn(iso);
+    if (planned.includes(weekday) && phase && phase.phase === 'fast') excused++;
+  }
+  return Math.max(0, getWeeklyTarget() - excused);
 }
 
 function getTotalProgramSessions() {
@@ -318,6 +384,12 @@ function getWeekPlan(now = new Date()) {
       days.push({ iso, weekday: d.getDay(), type: 'rest', rescue: false, done, missed: false, isPast, isToday: false, beforeStart: true });
       continue;
     }
+    // Jour de jeûne : ni séance attendue ni retard (la semaine est dispensée de ces séances).
+    const fastPhase = fastPhaseOn(iso);
+    if (fastPhase && fastPhase.phase === 'fast') {
+      days.push({ iso, weekday: d.getDay(), type: 'fast', fastDay: fastPhase.day, fastDays: fastPhase.days, rescue: false, done, missed: false, isPast, isToday: iso === todayIso });
+      continue;
+    }
     let type = planned.has(d.getDay()) ? 'training' : 'rest';
     let rescue = false;
 
@@ -353,7 +425,7 @@ function getStreak() {
     const to = isoOf(sunday);
     const count = sessions.filter((s) => s.date >= from && s.date <= to).length;
 
-    const weeklyTarget = getWeeklyTarget();
+    const weeklyTarget = getWeekTarget(from);
     let target = weeklyTarget;
     if (monday.getTime() === startMonday.getTime()) {
       const daysLeft = 7 - daysBetween(from, streakStart);
@@ -552,6 +624,28 @@ function buildICS(now = new Date()) {
   ].join('\r\n');
 }
 
+// Agenda (.ics) d'un jeûne : un événement sur toute la durée (dates sans heure, fin exclusive).
+function buildFastICS(fast, now = new Date()) {
+  const compact = (iso) => iso.replace(/-/g, '');
+  const utc = (d) => `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}${String(d.getUTCDate()).padStart(2, '0')}T${String(d.getUTCHours()).padStart(2, '0')}${String(d.getUTCMinutes()).padStart(2, '0')}${String(d.getUTCSeconds()).padStart(2, '0')}Z`;
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//HomeFit Coach//FR',
+    'CALSCALE:GREGORIAN',
+    'BEGIN:VEVENT',
+    `UID:homefit-fast-${fast.start}@homefit-coach`,
+    `DTSTAMP:${utc(now)}`,
+    `DTSTART;VALUE=DATE:${compact(fast.start)}`,
+    `DTEND;VALUE=DATE:${compact(addDaysISO(fast.start, fast.days))}`,
+    `SUMMARY:Jeûne communautaire (${fast.days} jour${fast.days > 1 ? 's' : ''})`,
+    'DESCRIPTION:Récupération douce uniquement. Bois régulièrement et arrête-toi en cas de malaise.',
+    'END:VEVENT',
+    'END:VCALENDAR',
+    '',
+  ].join('\r\n');
+}
+
 function downloadICS() {
   downloadBlob(new Blob([buildICS()], { type: 'text/calendar;charset=utf-8' }), 'homefit-coach-agenda.ics');
 }
@@ -576,7 +670,7 @@ function getWeekStats() {
 
   return {
     sessionsThisWeek: thisWeek.length,
-    targetSessionsPerWeek: getWeeklyTarget(),
+    targetSessionsPerWeek: getWeekTarget(isoOf(startOfWeek)),
     totalMinutes,
     repsByExercise,
   };

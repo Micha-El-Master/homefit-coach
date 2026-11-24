@@ -174,7 +174,9 @@
   const profile = getProfile();
   const settings = getSettings();
   const chosenTitle = new URLSearchParams(location.search).get('s');
-  const today = getTodayWorkout(profile, chosenTitle);
+  // Un jour de jeûne, la séance proposée par défaut est la récupération douce.
+  const fastToday = fastPhaseOn(todayISO());
+  const today = getTodayWorkout(profile, chosenTitle || (fastToday && fastToday.phase === 'fast' ? RECOVERY_TITLE : null));
 
   const adaptationRaw = sessionStorage.getItem('coachAdaptation');
   const adaptation = adaptationRaw ? JSON.parse(adaptationRaw) : null;
@@ -250,6 +252,7 @@
       /* pas de bandeau de plan en récupération */
     } else if (todayPlan.rescue && !todayPlan.done) notes.push('🔁 <strong>Jour de rattrapage</strong> — cette séance garde ta série.');
     else if (todayPlan.type === 'rest' && !todayPlan.done) notes.push("😌 Aujourd'hui est un jour de repos prévu : tu peux t'entraîner quand même, la séance comptera pour ta semaine.");
+    if (today.fastNote) notes.push(`🌿 <strong>Jeûne communautaire</strong> — ${today.fastNote}`);
     if (today.goalNote) notes.push(`🎯 ${today.goalNote}`);
     if (today.equipmentNote) notes.push(`🧰 ${today.equipmentNote}`);
     if (today.phase.label) notes.push(`<strong>Semaine ${today.week}/${TOTAL_WEEKS}</strong> — ${today.phase.label}`);

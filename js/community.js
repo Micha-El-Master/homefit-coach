@@ -7,6 +7,7 @@ const COMMUNITY_DEFAULTS = {
   nextCohort: null, // { start: 'YYYY-MM-DD', label: 'Cohorte 1', seats: 50 }
   announcement: null, // { id, title, text, until, linkLabel, linkUrl }
   weeklyChallenge: null, // { from, title, text, challengeId }
+  fasts: [], // [{ start: 'YYYY-MM-DD', days: 3 }] : jeûnes communautaires annoncés
 };
 
 const WHATSAPP_HOSTS = ['chat.whatsapp.com', 'whatsapp.com', 'www.whatsapp.com', 'wa.me'];
@@ -54,6 +55,8 @@ function sanitizeCommunityConfig(raw) {
       linkUrl: isHttpsUrl(a.linkUrl) ? a.linkUrl : '',
     };
   }
+
+  if (Array.isArray(raw.fasts)) cfg.fasts = sanitizeFasts(raw.fasts.map((f) => (f && f.days === undefined ? { ...f, days: 3 } : f)));
 
   const w = raw.weeklyChallenge;
   if (w && isIsoDate(w.from) && clip(w.title, 80)) {

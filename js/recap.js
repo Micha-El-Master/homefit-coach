@@ -38,7 +38,7 @@ function getWeekRecap(monday) {
     to,
     count: sessions.length,
     recoveries,
-    target: getWeeklyTarget(),
+    target: getWeekTarget(from),
     minutes,
     calories,
     totalReps,
