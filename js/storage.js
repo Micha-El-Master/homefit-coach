@@ -534,6 +534,25 @@ function importData(jsonString) {
   clearInProgress();
 }
 
+// Efface les historiques et données de suivi sans toucher au profil ni aux préférences.
+function resetProgression() {
+  [
+    STORAGE_KEYS.SESSIONS,
+    STORAGE_KEYS.KEGEL,
+    STORAGE_KEYS.ADJUST,
+    STORAGE_KEYS.WATER,
+    STORAGE_KEYS.IN_PROGRESS,
+    STORAGE_KEYS.RECOVERY,
+    STORAGE_KEYS.CHALLENGES,
+  ].forEach((key) => localStorage.removeItem(key));
+
+  const settings = getSettings();
+  settings.fasts = [];
+  settings.lastBackupAt = null;
+  settings.backupSnoozeUntil = null;
+  saveSettings(settings);
+}
+
 // Efface toutes les données de l'application (clés hfc_*) sur cet appareil.
 function eraseAllData() {
   const keys = [];

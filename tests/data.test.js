@@ -103,3 +103,32 @@ test('effacement : supprime toutes les clés de l\'application et rien d\'autre'
   app.run('eraseAllData()');
   assert.deepStrictEqual(Object.keys(app.store), ['autre_site']);
 });
+
+test('réinitialisation de la progression : conserve le profil, les préférences et les données non liées au suivi', () => {
+  const app = seeded();
+  app.settings({
+    theme: 'dark',
+    trainingDays: [1, 3, 5],
+    fasts: [{ start: '2026-10-20', days: 3 }],
+    lastBackupAt: '2026-10-01T12:00:00.000Z',
+    backupSnoozeUntil: '2026-10-18T12:00:00.000Z',
+  });
+  app.set('hfc_recovery', [{ date: '2026-10-05' }]);
+  app.set('hfc_challenges', { active: { pompes30: {} }, history: [] });
+  app.set('hfc_inprogress', { workout: 'today' });
+  app.store.autre_site = 'garde-moi';
+
+  app.run('resetProgression()');
+
+  assert.strictEqual(JSON.parse(app.store.hfc_profile).name, 'Alice');
+  assert.deepStrictEqual(JSON.parse(app.store.hfc_settings).trainingDays, [1, 3, 5]);
+  assert.strictEqual(JSON.parse(app.store.hfc_settings).theme, 'dark');
+  assert.deepStrictEqual(JSON.parse(app.store.hfc_settings).fasts, []);
+  assert.strictEqual(JSON.parse(app.store.hfc_settings).lastBackupAt, null);
+  assert.strictEqual(JSON.parse(app.store.hfc_settings).backupSnoozeUntil, null);
+  assert.deepStrictEqual(JSON.parse(app.store.hfc_shopping), ['3 œufs']);
+  assert.strictEqual(app.store.autre_site, 'garde-moi');
+  for (const key of ['hfc_sessions', 'hfc_kegel_sessions', 'hfc_adjust', 'hfc_water', 'hfc_recovery', 'hfc_challenges', 'hfc_inprogress']) {
+    assert.strictEqual(app.store[key], undefined, `${key} doit être supprimée`);
+  }
+});
