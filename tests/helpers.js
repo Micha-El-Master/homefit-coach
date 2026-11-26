@@ -25,6 +25,7 @@ function createApp({ now = new Date(2026, 9, 15, 12, 0, 0), store = {} } = {}) {
     localStorage: {
       getItem: (k) => (k in store ? store[k] : null),
       setItem: (k, v) => {
+        if (store.__failWrites === true) throw new Error('Quota de stockage dépassé');
         store[k] = String(v);
       },
       removeItem: (k) => {

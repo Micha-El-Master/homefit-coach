@@ -140,13 +140,22 @@
     <p id="data-status" style="font-size:13px; margin:0 0 12px; line-height:1.6;"></p>
     <p style="font-size:13px; color:var(--text-muted); margin:0 0 12px;">Tes données restent stockées dans ce navigateur, sur cet appareil. Pour les retrouver sur un autre appareil, utilise le code de transfert ou un fichier.</p>
 
+    <div id="import-preview" class="card" style="display:none; margin:12px 0; border:1.5px solid var(--primary); box-shadow:none;">
+      <h3 style="margin:0 0 8px;">Prévisualiser l’import</h3>
+      <p id="import-preview-text" style="font-size:13px; margin:0 0 12px;"></p>
+      <button class="btn btn-primary" id="import-preview-confirm" style="margin-bottom:8px;">Confirmer le remplacement</button>
+      <button class="btn btn-secondary" id="import-preview-cancel">Annuler</button>
+    </div>
+
     <a href="about.html" style="display:inline-block; margin-bottom:12px; font-size:13px; color:var(--primary); font-weight:600;">ℹ️ À propos, confidentialité et crédits</a><br>
     <button class="btn btn-secondary" id="code-copy-btn" style="margin-bottom:10px;">📋 Copier mon code de transfert</button>
     <label class="row-label" for="code-input" style="display:block; margin-top:6px;">Coller un code reçu d'un autre appareil</label>
     <textarea class="form-input" id="code-input" rows="3" placeholder="HFC1:…" style="margin:6px 0 10px; font-family:monospace; font-size:12px;"></textarea>
     <button class="btn btn-outline" id="code-import-btn" style="margin-bottom:16px;">⬇️ Importer ce code</button>
+    <p style="font-size:12px; color:var(--danger); margin:-8px 0 12px;">Le code de transfert est compressé et encodé, mais il n’est pas chiffré : son contenu peut être lu si quelqu’un y accède.</p>
 
     <button class="btn btn-secondary" id="export-btn" style="margin-bottom:10px;">💾 Exporter un fichier</button>
+    <button class="btn btn-secondary" id="restore-backup-btn" style="margin-bottom:10px;">↩️ Restaurer la copie locale</button>
     <button class="btn btn-secondary" id="share-btn" style="margin-bottom:10px; display:none;">📤 Partager le fichier (AirDrop, messages…)</button>
     <label class="btn btn-outline" for="import-input" style="display:flex; cursor:pointer;">📂 Importer un fichier</label>
     <input type="file" id="import-input" accept="application/json" style="display:none;" />
@@ -315,11 +324,50 @@
   renderDataStatus();
 
   const status = document.getElementById('import-status');
+  let pendingImportJson = null;
   function showStatus(message, ok) {
     status.style.display = 'block';
     status.style.color = ok ? 'var(--accent)' : 'var(--danger)';
     status.textContent = message;
   }
+  function showImportPreview(json) {
+    try {
+      const preview = buildImportPreview(json);
+      pendingImportJson = json;
+      const categories = preview.otherCategories.length ? preview.otherCategories.join(', ') : 'aucune catégorie secondaire';
+      document.getElementById('import-preview-text').innerHTML =
+        `<strong>Profil :</strong> ${preview.name.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])}<br>` +
+        `<strong>Départ :</strong> ${preview.startDate}<br>` +
+        `<strong>Séances :</strong> ${preview.sessions}<br>` +
+        `<strong>Données secondaires :</strong> ${categories}` +
+        (preview.legacy ? '<br><strong>Compatibilité :</strong> sauvegarde ancienne, migrée automatiquement.' : '');
+      document.getElementById('import-preview').style.display = 'block';
+      return true;
+    } catch (err) {
+      pendingImportJson = null;
+      document.getElementById('import-preview').style.display = 'none';
+      showStatus('❌ ' + (err.message || 'Fichier invalide'), false);
+      return false;
+    }
+  }
+  document.getElementById('import-preview-cancel').addEventListener('click', () => {
+    pendingImportJson = null;
+    document.getElementById('import-preview').style.display = 'none';
+    showStatus('Import annulé. Aucune donnée modifiée.', true);
+  });
+  document.getElementById('import-preview-confirm').addEventListener('click', () => {
+    if (!pendingImportJson) return;
+    try {
+      importData(pendingImportJson);
+      pendingImportJson = null;
+      document.getElementById('import-preview').style.display = 'none';
+      afterImport();
+    } catch (err) {
+      pendingImportJson = null;
+      document.getElementById('import-preview').style.display = 'none';
+      showStatus('❌ ' + (err.message || 'Importation impossible'), false);
+    }
+  });
   function afterImport() {
     showStatus('✔ Données importées. Rechargement…', true);
     setTimeout(() => location.reload(), 900);
@@ -332,15 +380,35 @@
 
   document.getElementById('reset-progress-btn').addEventListener('click', () => {
     if (!confirm('Réinitialiser ta progression ? Les séances, historiques Kegel, défis, hydratation, récupération, jeûnes et ajustements d’exercices seront supprimés. Un nouveau cycle de 12 semaines commencera aujourd’hui ; ton profil et tes préférences seront conservés.')) return;
-    resetProgression();
-    location.reload();
+    try {
+      resetProgression();
+      location.reload();
+    } catch (err) {
+      showStatus('❌ ' + (err.message || 'Réinitialisation impossible'), false);
+    }
   });
 
   document.getElementById('erase-all-btn').addEventListener('click', () => {
     if (!confirm('Effacer définitivement toutes tes données HomeFit sur cet appareil, y compris ton profil et tes réglages ?')) return;
     if (!confirm('Dernière confirmation : cette action est irréversible. Continuer ?')) return;
-    eraseAllData();
-    location.href = 'index.html';
+    try {
+      exportData();
+      eraseAllData();
+      location.href = 'index.html';
+    } catch (err) {
+      showStatus('❌ ' + (err.message || 'Suppression impossible'), false);
+    }
+  });
+
+  document.getElementById('restore-backup-btn').addEventListener('click', () => {
+    if (!getLocalBackup()) return showStatus('❌ Aucune copie de sécurité locale disponible.', false);
+    if (!confirm('Remplacer les données actuelles par la copie de sécurité locale ?')) return;
+    try {
+      restoreLocalBackup();
+      afterImport();
+    } catch (err) {
+      showStatus('❌ ' + (err.message || 'Restauration impossible'), false);
+    }
   });
 
   if (navigator.canShare && navigator.canShare({ files: [new File(['{}'], 'x.json', { type: 'application/json' })] })) {
@@ -372,10 +440,7 @@
     if (!code.trim()) return showStatus('❌ Colle d’abord un code.', false);
     try {
       const json = await readTransferCode(code);
-      validateImportData(JSON.parse(json));
-      if (!confirm('Remplacer toutes les données de cet appareil par celles du code ?')) return;
-      importData(json);
-      afterImport();
+      showImportPreview(json);
     } catch (err) {
       showStatus('❌ ' + (err.message || 'Code invalide'), false);
     }
@@ -387,10 +452,7 @@
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        validateImportData(JSON.parse(reader.result));
-        if (!confirm('Remplacer toutes les données de cet appareil par celles du fichier ?')) return;
-        importData(reader.result);
-        afterImport();
+        showImportPreview(reader.result);
       } catch (err) {
         showStatus('❌ Fichier invalide.', false);
       }

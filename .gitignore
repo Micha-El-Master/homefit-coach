@@ -1,6 +1,8 @@
 .DS_Store
 .claude/
 node_modules/
+test-results/
+playwright-report/
 
 # Documents internes (stratégie, modération, modèles de messages) : volontairement hors du dépôt public
 docs-communaute/

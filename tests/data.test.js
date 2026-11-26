@@ -29,10 +29,137 @@ test('export puis import restaure toutes les données', () => {
 test('import : un fichier invalide est refusé sans rien écraser', () => {
   const app = seeded();
   const before = JSON.stringify(app.store);
-  for (const bad of ['{}', '{"app":"autre"}', '[]', '{"app":"HomeFit Coach"}', '{"app":"HomeFit Coach","profile":{"name":"x","startDate":"2026-01-01"},"sessions":"non"}', 'pas du json']) {
+  for (const bad of [
+    '{}',
+    '{"app":"autre"}',
+    '[]',
+    '{"app":"HomeFit Coach"}',
+    '{"app":"HomeFit Coach","profile":{"name":"x","startDate":"2026-01-01"},"sessions":"non"}',
+    '{"app":"HomeFit Coach","schemaVersion":999,"profile":{"name":"x","startDate":"2026-01-01"}}',
+    'pas du json',
+  ]) {
     assert.throws(() => app.run(`importData(${JSON.stringify(bad)})`), undefined, bad);
   }
   assert.strictEqual(JSON.stringify(app.store), before);
+});
+
+test('import : JSON invalide et profil corrompu ne modifient rien', () => {
+  const app = seeded();
+  const before = JSON.stringify(app.store);
+  assert.throws(() => app.run(`importData('{')`));
+  assert.throws(() => app.run(`importData(${JSON.stringify(JSON.stringify({ app: 'HomeFit Coach', profile: { name: '', startDate: '2026-01-01' }, sessions: [] }))})`));
+  assert.strictEqual(JSON.stringify(app.store), before);
+});
+
+test('import : historique et tableaux imbriqués invalides sont refusés', () => {
+  const app = seeded();
+  const before = JSON.stringify(app.store);
+  const bads = [
+    { app: 'HomeFit Coach', profile: { name: 'Alice', startDate: '2026-01-01' }, kegel: 'non' },
+    { app: 'HomeFit Coach', profile: { name: 'Alice', startDate: '2026-01-01' }, sessions: [{ date: '2026-99-99' }] },
+    { app: 'HomeFit Coach', profile: { name: 'Alice', startDate: '2026-01-01' }, sessions: [{ date: '2026-01-01', duration: -1 }] },
+  ];
+  bads.forEach((bad) => assert.throws(() => app.run(`importData(${JSON.stringify(JSON.stringify(bad))})`)));
+  assert.strictEqual(JSON.stringify(app.store), before);
+});
+
+test('import : anciennes sauvegardes compatibles restent utilisables', () => {
+  const app = createApp();
+  const legacy = {
+    app: 'HomeFit Coach',
+    exportedAt: '2026-10-10T12:00:00.000Z',
+    profile: { name: 'Legacy', goal: 'forme', level: 'debutant', startDate: '2026-10-10' },
+    sessions: [{ date: '2026-10-11', title: 'Haut du corps', duration: 20, calories: 100 }],
+  };
+  app.run(`importData(${JSON.stringify(JSON.stringify(legacy))})`);
+  assert.strictEqual(app.run('getProfile().name'), 'Legacy');
+  assert.strictEqual(app.run('getSessionLog().length'), 1);
+});
+
+test('import : aperçu liste profil, séances et catégories disponibles', () => {
+  const app = seeded();
+  const data = app.run('collectExportData()');
+  const preview = app.run(`buildImportPreview(${JSON.stringify(JSON.stringify(data))})`);
+  assert.strictEqual(preview.name, 'Alice');
+  assert.strictEqual(preview.sessions, 1);
+  assert.deepStrictEqual(preview.otherCategories, ['1 séance Kegel', 'hydratation', 'liste de courses']);
+});
+
+test('import : création de sauvegarde préalable vérifiée puis remplacement', () => {
+  const app = seeded();
+  const beforeProfile = app.store.hfc_profile;
+  const incoming = {
+    app: 'HomeFit Coach',
+    schemaVersion: 1,
+    profile: { name: 'Bob', goal: 'muscle', level: 'intermediaire', startDate: '2026-10-15' },
+    sessions: [],
+  };
+  app.run(`importData(${JSON.stringify(JSON.stringify(incoming))})`);
+  assert.strictEqual(app.run('getProfile().name'), 'Bob');
+  const backup = app.run('getLocalBackup()');
+  assert.strictEqual(JSON.parse(app.store.hfc_profile).name, 'Bob');
+  assert.strictEqual(backup.snapshot.profile.name, 'Alice');
+  assert.notStrictEqual(app.store.hfc_profile, beforeProfile);
+});
+
+test('import : échec de sauvegarde préalable ne modifie rien', () => {
+  const app = seeded();
+  const before = JSON.stringify(app.store);
+  app.store.__failWrites = true;
+  const incoming = { app: 'HomeFit Coach', profile: { name: 'Bob', startDate: '2026-10-15' } };
+  assert.throws(() => app.run(`importData(${JSON.stringify(JSON.stringify(incoming))})`));
+  assert.strictEqual(app.store.hfc_profile, JSON.parse(before).hfc_profile);
+  assert.strictEqual(app.store.hfc_sessions, JSON.parse(before).hfc_sessions);
+});
+
+test('restauration : copie locale peut être restaurée', () => {
+  const app = seeded();
+  const incoming = { app: 'HomeFit Coach', profile: { name: 'Bob', startDate: '2026-10-15' }, sessions: [] };
+  app.run(`importData(${JSON.stringify(JSON.stringify(incoming))})`);
+  assert.strictEqual(app.run('getProfile().name'), 'Bob');
+  app.run('restoreLocalBackup()');
+  assert.strictEqual(app.run('getProfile().name'), 'Alice');
+  assert.strictEqual(app.run('getSessionLog().length'), 1);
+});
+
+test('stockage : JSON corrompu retourne les valeurs sûres', () => {
+  const app = seeded();
+  app.store.hfc_profile = '{';
+  app.store.hfc_sessions = '{';
+  app.store.hfc_settings = '{';
+  assert.strictEqual(app.run('getProfile()'), null);
+  assert.deepStrictEqual(app.run('getSessionLog()'), []);
+  assert.strictEqual(app.run('getSettings().theme'), 'auto');
+});
+
+test('stockage : écriture en échec retourne false', () => {
+  const app = seeded();
+  app.store.__failWrites = true;
+  assert.strictEqual(app.run(`saveProfile({ name: 'Erreur', startDate: '2026-10-15' })`), false);
+});
+
+test('import : valeurs numériques hors limites sont refusées', () => {
+  const app = seeded();
+  const before = JSON.stringify(app.store);
+  const bad = {
+    app: 'HomeFit Coach',
+    profile: {
+      name: 'Alice',
+      startDate: '2026-10-15',
+      body: { weight: 300, height: 180, age: 30, sex: 'f', activity: 1.55 },
+    },
+  };
+  assert.throws(() => app.run(`importData(${JSON.stringify(JSON.stringify(bad))})`));
+  assert.strictEqual(JSON.stringify(app.store), before);
+});
+
+test('réinitialisation : crée une copie locale vérifiée avant la suppression', () => {
+  const app = seeded();
+  app.run('resetProgression()');
+  const backup = app.run('getLocalBackup()');
+  assert.strictEqual(backup.source, 'reset');
+  assert.strictEqual(backup.snapshot.profile.name, 'Alice');
+  assert.strictEqual(app.run('getSessionLog().length'), 0);
 });
 
 test('code de transfert : aller-retour compressé', async () => {

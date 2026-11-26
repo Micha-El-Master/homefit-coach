@@ -3,7 +3,13 @@
   "private": true,
   "description": "HomeFit Coach : application web de coaching fitness à domicile",
   "scripts": {
-    "test": "node --test \"tests/*.test.js\"",
+    "test": "npm run test:unit",
+    "test:unit": "node --test \"tests/*.test.js\"",
+    "test:browser": "playwright test",
+    "test:baseline": "npm run test:unit && npm run test:browser",
     "start": "node serve.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.1"
   }
 }

@@ -29,7 +29,35 @@ node serve.js   # puis ouvrir http://localhost:4173
 ## Tests
 
 ```bash
-npm test   # logique métier : plan de semaine, série, progression, matériel, transfert, agenda
+npm test              # alias complet des tests unitaires actuels
+npm run test:unit     # logique métier : plan de semaine, série, progression, matériel, transfert, agenda
+npm run test:browser  # parcours navigateur sur les résolutions 320, 375, 390 et 430 px
+npm run test:baseline # tests unitaires puis tests navigateur
 ```
 
 Les tests tournent aussi à chaque `push` via GitHub Actions.
+
+## Tests navigateur reproductibles
+
+Les tests Playwright utilisent le serveur local intégré et vérifient :
+
+- le parcours sans profil ;
+- la création d’un profil ;
+- les pages essentielles avec profil ;
+- l’absence d’erreurs JavaScript ;
+- la largeur des écrans mobiles.
+
+Première installation :
+
+```bash
+npm install
+npx playwright install chromium
+npm run test:browser
+```
+
+La matrice couvre les largeurs suivantes :
+
+- 320 px — petit téléphone
+- 375 px — téléphone courant
+- 390 px — téléphone moderne
+- 430 px — grand téléphone

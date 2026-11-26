@@ -1,4 +1,9 @@
 const TOTAL_WEEKS = 12;
+const DATA_SCHEMA_VERSION = 1;
+const LOCAL_BACKUP_KEY = 'hfc_backup_snapshot';
+const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
+const MAX_IMPORT_SESSIONS = 10000;
+const MAX_IMPORT_KEGEL = 10000;
 
 const STORAGE_KEYS = {
   PROFILE: 'hfc_profile',
@@ -16,23 +21,31 @@ const STORAGE_KEYS = {
 function readJSON(key, fallback) {
   try {
     const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
+    if (!raw) return fallback;
+    const value = JSON.parse(raw);
+    return value;
   } catch (e) {
     return fallback;
   }
 }
 
 function writeJSON(key, value) {
-  localStorage.setItem(key, JSON.stringify(value));
+  try {
+    const serialized = JSON.stringify(value);
+    localStorage.setItem(key, serialized);
+    return localStorage.getItem(key) === serialized;
+  } catch (e) {
+    return false;
+  }
 }
 
 function getProfile() {
-  const raw = localStorage.getItem(STORAGE_KEYS.PROFILE);
-  return raw ? JSON.parse(raw) : null;
+  const profile = readJSON(STORAGE_KEYS.PROFILE, null);
+  return isPlainObject(profile) ? profile : null;
 }
 
 function saveProfile(profile) {
-  localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(profile));
+  return writeJSON(STORAGE_KEYS.PROFILE, profile);
 }
 
 function hasProfile() {
@@ -40,25 +53,25 @@ function hasProfile() {
 }
 
 function getSessionLog() {
-  const raw = localStorage.getItem(STORAGE_KEYS.SESSIONS);
-  return raw ? JSON.parse(raw) : [];
+  const log = readJSON(STORAGE_KEYS.SESSIONS, []);
+  return Array.isArray(log) ? log : [];
 }
 
 function addSessionLog(entry) {
   const log = getSessionLog();
   log.push(entry);
-  localStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(log));
+  writeJSON(STORAGE_KEYS.SESSIONS, log);
 }
 
 function getKegelLog() {
-  const raw = localStorage.getItem(STORAGE_KEYS.KEGEL);
-  return raw ? JSON.parse(raw) : [];
+  const log = readJSON(STORAGE_KEYS.KEGEL, []);
+  return Array.isArray(log) ? log : [];
 }
 
 function addKegelLog(entry) {
   const log = getKegelLog();
   log.push(entry);
-  localStorage.setItem(STORAGE_KEYS.KEGEL, JSON.stringify(log));
+  writeJSON(STORAGE_KEYS.KEGEL, log);
 }
 
 // Jours d'entraînement par défaut selon l'ancien objectif (0 = dimanche … 6 = samedi).
@@ -66,7 +79,6 @@ const DEFAULT_TRAINING_DAYS = [1, 2, 4, 5];
 const DAYS_BY_TARGET = { 1: [3], 2: [1, 4], 3: [1, 3, 5], 4: [1, 2, 4, 5], 5: [1, 2, 3, 4, 5], 6: [1, 2, 3, 4, 5, 6] };
 
 function getSettings() {
-  const raw = localStorage.getItem(STORAGE_KEYS.SETTINGS);
   const defaults = {
     theme: 'auto',
     fontScale: 1,
@@ -86,7 +98,8 @@ function getSettings() {
     warmup: true,
     cooldown: true,
   };
-  const saved = raw ? JSON.parse(raw) : {};
+  const savedRaw = readJSON(STORAGE_KEYS.SETTINGS, {});
+  const saved = isPlainObject(savedRaw) ? savedRaw : {};
   const merged = { ...defaults, ...saved };
   // Migration : ancien réglage « nombre de séances par semaine » → jours équivalents.
   if (!saved.trainingDays && saved.weeklyTarget) {
@@ -96,7 +109,7 @@ function getSettings() {
 }
 
 function saveSettings(settings) {
-  localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
+  return writeJSON(STORAGE_KEYS.SETTINGS, settings);
 }
 
 function getTrainingDays() {
@@ -444,6 +457,7 @@ function getStreak() {
 function collectExportData() {
   return {
     app: 'HomeFit Coach',
+    schemaVersion: DATA_SCHEMA_VERSION,
     exportedAt: new Date().toISOString(),
     profile: getProfile(),
     sessions: getSessionLog(),
@@ -508,35 +522,234 @@ async function shareDataFile() {
   return true;
 }
 
+function isPlainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function byteLength(value) {
+  if (typeof TextEncoder !== 'undefined') return new TextEncoder().encode(value).length;
+  return value.length;
+}
+
+function migrateImportData(data) {
+  if (!isPlainObject(data)) throw new Error('Fichier invalide');
+  if (data.app !== 'HomeFit Coach') throw new Error('Fichier invalide');
+  if (data.schemaVersion !== undefined && data.schemaVersion !== DATA_SCHEMA_VERSION) {
+    throw new Error('Version de sauvegarde inconnue');
+  }
+  const migrated = { ...data, schemaVersion: DATA_SCHEMA_VERSION };
+  if (migrated.sessions === undefined) migrated.sessions = [];
+  if (migrated.kegel === undefined) migrated.kegel = [];
+  if (migrated.adjustments === undefined) migrated.adjustments = {};
+  if (migrated.water === undefined) migrated.water = {};
+  if (migrated.shopping === undefined) migrated.shopping = [];
+  if (migrated.recovery === undefined) migrated.recovery = [];
+  return migrated;
+}
+
+function validateIsoDateOptional(value) {
+  return value === undefined || (typeof value === 'string' && isIsoDate(value));
+}
+
 // Vérifie la forme des données avant de toucher au stockage, pour ne pas écraser un profil sain par un fichier invalide.
 function validateImportData(data) {
-  const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
-  if (!isObj(data) || data.app !== 'HomeFit Coach') throw new Error('Fichier invalide');
-  if (!isObj(data.profile) || !data.profile.name || !data.profile.startDate) throw new Error('Profil manquant');
-  if (data.sessions !== undefined && !Array.isArray(data.sessions)) throw new Error('Séances invalides');
-  if (data.kegel !== undefined && !Array.isArray(data.kegel)) throw new Error('Historique Kegel invalide');
-  if (data.settings !== undefined && !isObj(data.settings)) throw new Error('Réglages invalides');
+  const migrated = migrateImportData(data);
+  if (!isPlainObject(migrated.profile) || typeof migrated.profile.name !== 'string'
+      || !migrated.profile.name.trim() || migrated.profile.name.length > 100
+      || typeof migrated.profile.startDate !== 'string' || !isIsoDate(migrated.profile.startDate)) {
+    throw new Error('Profil invalide');
+  }
+  if (migrated.profile.goal !== undefined && !['muscle', 'perte', 'forme', 'discipline'].includes(migrated.profile.goal)) {
+    throw new Error('Objectif invalide');
+  }
+  if (migrated.profile.level !== undefined
+      && !['debutant', 'intermediaire', 'avance'].includes(migrated.profile.level)
+      && typeof migrated.profile.level !== 'number') {
+    throw new Error('Niveau invalide');
+  }
+  if (migrated.profile.levelScore !== undefined
+      && (!Number.isFinite(migrated.profile.levelScore) || migrated.profile.levelScore < 1 || migrated.profile.levelScore > 10)) {
+    throw new Error('Score de niveau invalide');
+  }
+  if (migrated.profile.body !== undefined) {
+    const body = migrated.profile.body;
+    if (!isPlainObject(body)
+        || !Number.isFinite(body.weight) || body.weight < 30 || body.weight > 250
+        || !Number.isFinite(body.height) || body.height < 120 || body.height > 230
+        || !Number.isFinite(body.age) || body.age < 14 || body.age > 90
+        || !['m', 'f'].includes(body.sex)
+        || ![1.4, 1.55, 1.7].includes(body.activity)) {
+      throw new Error('Profil physique invalide');
+    }
+  }
+  if (!Array.isArray(migrated.sessions) || migrated.sessions.length > MAX_IMPORT_SESSIONS) {
+    throw new Error('Séances invalides');
+  }
+  for (const session of migrated.sessions) {
+    if (!isPlainObject(session) || typeof session.date !== 'string' || !isIsoDate(session.date)) throw new Error('Séance invalide');
+    if (session.duration !== undefined && (!Number.isFinite(session.duration) || session.duration < 0 || session.duration > 1440)) {
+      throw new Error('Durée de séance invalide');
+    }
+    if (session.calories !== undefined && (!Number.isFinite(session.calories) || session.calories < 0 || session.calories > 10000)) {
+      throw new Error('Calories de séance invalides');
+    }
+  }
+  if (!Array.isArray(migrated.kegel) || migrated.kegel.length > MAX_IMPORT_KEGEL) throw new Error('Historique Kegel invalide');
+  for (const entry of migrated.kegel) {
+    if (!isPlainObject(entry) || typeof entry.date !== 'string' || !isIsoDate(entry.date)) throw new Error('Entrée Kegel invalide');
+  }
+  if (migrated.settings !== undefined) {
+    if (!isPlainObject(migrated.settings)) throw new Error('Réglages invalides');
+    if (migrated.settings.restSeconds !== undefined
+        && (!Number.isFinite(migrated.settings.restSeconds) || migrated.settings.restSeconds < 30 || migrated.settings.restSeconds > 90)) {
+      throw new Error('Durée de repos invalide');
+    }
+    if (migrated.settings.trainingDays !== undefined) {
+      if (!Array.isArray(migrated.settings.trainingDays) || migrated.settings.trainingDays.length > 6
+          || migrated.settings.trainingDays.some((day) => !Number.isInteger(day) || day < 0 || day > 6)) {
+        throw new Error('Jours d’entraînement invalides');
+      }
+    }
+  }
+  if (!isPlainObject(migrated.adjustments)) throw new Error('Ajustements invalides');
+  if (!isPlainObject(migrated.water)) throw new Error('Hydratation invalide');
+  for (const [key, value] of Object.entries(migrated.water)) {
+    if (!isIsoDate(key) || !Number.isFinite(value) || value < 0 || value > 100000) {
+      throw new Error('Hydratation invalide');
+    }
+  }
+  if (migrated.shopping.length > 1000 || migrated.shopping.some((item) => typeof item !== 'string')) {
+    throw new Error('Liste de courses invalide');
+  }
+  if (migrated.recovery.length > MAX_IMPORT_SESSIONS) throw new Error('Historique de récupération invalide');
+  if (migrated.challenges !== undefined && !isPlainObject(migrated.challenges)) throw new Error('Défis invalides');
+  return migrated;
+}
+
+function buildImportPreview(data) {
+  if (typeof data === 'string') {
+    if (byteLength(data) > MAX_IMPORT_BYTES) throw new Error('Sauvegarde trop volumineuse');
+    try {
+      data = JSON.parse(data);
+    } catch (e) {
+      throw new Error('JSON invalide');
+    }
+  }
+  const validated = validateImportData(data);
+  const otherCategories = [];
+  if (validated.kegel.length) otherCategories.push(`${validated.kegel.length} séance${validated.kegel.length > 1 ? 's' : ''} Kegel`);
+  if (Object.keys(validated.water).length) otherCategories.push('hydratation');
+  if (validated.shopping.length) otherCategories.push('liste de courses');
+  if (validated.recovery.length) otherCategories.push('récupération');
+  if (validated.challenges && (Object.keys(validated.challenges.active || {}).length || (validated.challenges.history || []).length)) {
+    otherCategories.push('défis');
+  }
+  return {
+    name: validated.profile.name,
+    startDate: validated.profile.startDate,
+    sessions: validated.sessions.length,
+    otherCategories,
+    legacy: data.schemaVersion === undefined,
+  };
+}
+
+function getLocalBackup() {
+  const record = readJSON(LOCAL_BACKUP_KEY, null);
+  if (!isPlainObject(record) || !isPlainObject(record.snapshot)) return null;
+  return record;
+}
+
+function createLocalBackup(source = 'replacement') {
+  const snapshot = collectExportData();
+  const record = {
+    app: 'HomeFit Coach',
+    savedAt: new Date().toISOString(),
+    source,
+    snapshot,
+  };
+  if (!writeJSON(LOCAL_BACKUP_KEY, record)) throw new Error('Impossible de créer la copie de sécurité locale');
+  const verified = getLocalBackup();
+  if (!verified || verified.savedAt !== record.savedAt) throw new Error('Copie de sécurité locale non vérifiée');
+  return record;
+}
+
+function restoreLocalBackup() {
+  const record = getLocalBackup();
+  if (!record) throw new Error('Aucune copie de sécurité disponible');
+  const data = validateImportData(record.snapshot);
+  createLocalBackup('restore');
+  return applyImportData(data);
+}
+
+function parseImportJson(jsonString) {
+  if (typeof jsonString !== 'string') throw new Error('Fichier invalide');
+  if (byteLength(jsonString) > MAX_IMPORT_BYTES) throw new Error('Sauvegarde trop volumineuse');
+  let data;
+  try {
+    data = JSON.parse(jsonString);
+  } catch (e) {
+    throw new Error('JSON invalide');
+  }
+  return validateImportData(data);
+}
+
+function applyImportData(data) {
+  const keys = [
+    STORAGE_KEYS.PROFILE,
+    STORAGE_KEYS.SESSIONS,
+    STORAGE_KEYS.KEGEL,
+    STORAGE_KEYS.SETTINGS,
+    STORAGE_KEYS.ADJUST,
+    STORAGE_KEYS.WATER,
+    STORAGE_KEYS.SHOPPING,
+    STORAGE_KEYS.RECOVERY,
+    STORAGE_KEYS.CHALLENGES,
+    STORAGE_KEYS.IN_PROGRESS,
+  ];
+  const previous = {};
+  keys.forEach((key) => {
+    previous[key] = localStorage.getItem(key);
+  });
+
+  const rollback = () => {
+    keys.forEach((key) => {
+      if (previous[key] === null) localStorage.removeItem(key);
+      else localStorage.setItem(key, previous[key]);
+    });
+  };
+
+  try {
+    if (!writeJSON(STORAGE_KEYS.PROFILE, data.profile)) throw new Error('Impossible d’enregistrer le profil');
+    if (!writeJSON(STORAGE_KEYS.SESSIONS, data.sessions || [])) throw new Error('Impossible d’enregistrer les séances');
+    if (!writeJSON(STORAGE_KEYS.KEGEL, data.kegel || [])) throw new Error('Impossible d’enregistrer l’historique Kegel');
+    if (data.settings !== undefined && !writeJSON(STORAGE_KEYS.SETTINGS, data.settings)) throw new Error('Impossible d’enregistrer les réglages');
+    if (!writeJSON(STORAGE_KEYS.ADJUST, data.adjustments || {})) throw new Error('Impossible d’enregistrer les ajustements');
+    if (!writeJSON(STORAGE_KEYS.WATER, data.water || {})) throw new Error('Impossible d’enregistrer l’hydratation');
+    if (!writeJSON(STORAGE_KEYS.SHOPPING, data.shopping || [])) throw new Error('Impossible d’enregistrer la liste de courses');
+    if (!writeJSON(STORAGE_KEYS.RECOVERY, data.recovery || [])) throw new Error('Impossible d’enregistrer la récupération');
+    if (data.challenges !== undefined) {
+      if (!writeJSON(STORAGE_KEYS.CHALLENGES, data.challenges)) throw new Error('Impossible d’enregistrer les défis');
+    } else {
+      localStorage.removeItem(STORAGE_KEYS.CHALLENGES);
+    }
+    localStorage.removeItem(STORAGE_KEYS.IN_PROGRESS);
+    return true;
+  } catch (e) {
+    rollback();
+    throw e;
+  }
 }
 
 function importData(jsonString) {
-  const data = JSON.parse(jsonString);
-  validateImportData(data);
-  saveProfile(data.profile);
-  writeJSON(STORAGE_KEYS.SESSIONS, data.sessions || []);
-  writeJSON(STORAGE_KEYS.KEGEL, data.kegel || []);
-  if (data.settings) saveSettings(data.settings);
-  writeJSON(STORAGE_KEYS.ADJUST, data.adjustments || {});
-  writeJSON(STORAGE_KEYS.WATER, data.water || {});
-  writeJSON(STORAGE_KEYS.SHOPPING, data.shopping || []);
-  writeJSON(STORAGE_KEYS.RECOVERY, data.recovery || []);
-  if (data.challenges) writeJSON(STORAGE_KEYS.CHALLENGES, data.challenges);
-  else localStorage.removeItem(STORAGE_KEYS.CHALLENGES);
-  clearInProgress();
+  const data = parseImportJson(jsonString);
+  createLocalBackup('import');
+  return applyImportData(data);
 }
 
 // Efface les historiques et données de suivi sans toucher au profil ni aux préférences.
 function resetProgression() {
-  [
+  createLocalBackup('reset');
+  const keys = [
     STORAGE_KEYS.SESSIONS,
     STORAGE_KEYS.KEGEL,
     STORAGE_KEYS.ADJUST,
@@ -544,24 +757,48 @@ function resetProgression() {
     STORAGE_KEYS.IN_PROGRESS,
     STORAGE_KEYS.RECOVERY,
     STORAGE_KEYS.CHALLENGES,
+  ];
+  const previous = {};
+  keys.forEach((key) => {
+    previous[key] = localStorage.getItem(key);
+  });
+  previous[STORAGE_KEYS.PROFILE] = localStorage.getItem(STORAGE_KEYS.PROFILE);
+  previous[STORAGE_KEYS.SETTINGS] = localStorage.getItem(STORAGE_KEYS.SETTINGS);
+
+  const rollback = () => {
+    Object.entries(previous).forEach(([key, value]) => {
+      if (value === null) localStorage.removeItem(key);
+      else localStorage.setItem(key, value);
+    });
+  };
+
+  try {
+  [
+    ...keys,
   ].forEach((key) => localStorage.removeItem(key));
 
   const profile = getProfile();
+  if (!profile) throw new Error('Profil introuvable');
   profile.startDate = todayISO();
   profile.streakStart = todayISO();
   profile.cycle = 1;
   profile.mode = 'standard';
-  saveProfile(profile);
+  if (!saveProfile(profile)) throw new Error('Impossible d’enregistrer le nouveau profil');
 
   const settings = getSettings();
   settings.fasts = [];
   settings.lastBackupAt = null;
   settings.backupSnoozeUntil = null;
-  saveSettings(settings);
+  if (!writeJSON(STORAGE_KEYS.SETTINGS, settings)) throw new Error('Impossible d’enregistrer les nouveaux réglages');
+  } catch (e) {
+    rollback();
+    throw e;
+  }
 }
 
 // Efface toutes les données de l'application (clés hfc_*) sur cet appareil.
 function eraseAllData() {
+  createLocalBackup('erase');
   const keys = [];
   for (let i = 0; i < localStorage.length; i++) keys.push(localStorage.key(i));
   keys.filter((k) => k && k.startsWith('hfc_')).forEach((k) => localStorage.removeItem(k));
@@ -592,6 +829,7 @@ async function buildTransferCode() {
 
 async function readTransferCode(code) {
   const text = code.trim();
+  if (text.length > MAX_IMPORT_BYTES * 2) throw new Error('Code trop volumineux');
   const prefix = text.slice(0, 5);
   let bytes;
   try {
@@ -605,7 +843,9 @@ async function readTransferCode(code) {
   } else if (prefix !== 'HFC0:') {
     throw new Error('Code invalide');
   }
-  return new TextDecoder().decode(bytes);
+  const json = new TextDecoder().decode(bytes);
+  parseImportJson(json);
+  return json;
 }
 
 // Agenda (.ics) : un événement hebdomadaire récurrent sur les jours d'entraînement choisis, à l'heure du rappel.
