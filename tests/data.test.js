@@ -106,6 +106,13 @@ test('effacement : supprime toutes les clés de l\'application et rien d\'autre'
 
 test('réinitialisation de la progression : conserve le profil, les préférences et les données non liées au suivi', () => {
   const app = seeded();
+  app.profile({
+    name: 'Alice',
+    startDate: '2026-09-01',
+    streakStart: '2026-08-01',
+    cycle: 3,
+    mode: 'phase2',
+  });
   app.settings({
     theme: 'dark',
     trainingDays: [1, 3, 5],
@@ -120,7 +127,14 @@ test('réinitialisation de la progression : conserve le profil, les préférence
 
   app.run('resetProgression()');
 
-  assert.strictEqual(JSON.parse(app.store.hfc_profile).name, 'Alice');
+  const profile = JSON.parse(app.store.hfc_profile);
+  assert.strictEqual(profile.name, 'Alice');
+  assert.strictEqual(profile.startDate, '2026-10-15');
+  assert.strictEqual(profile.streakStart, '2026-10-15');
+  assert.strictEqual(profile.cycle, 1);
+  assert.strictEqual(profile.mode, 'standard');
+  assert.strictEqual(app.run('getProgramProgress().week'), 1);
+  assert.strictEqual(app.run('getProgramProgress().sessionsCompleted'), 0);
   assert.deepStrictEqual(JSON.parse(app.store.hfc_settings).trainingDays, [1, 3, 5]);
   assert.strictEqual(JSON.parse(app.store.hfc_settings).theme, 'dark');
   assert.deepStrictEqual(JSON.parse(app.store.hfc_settings).fasts, []);

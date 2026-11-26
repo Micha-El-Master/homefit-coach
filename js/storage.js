@@ -546,6 +546,13 @@ function resetProgression() {
     STORAGE_KEYS.CHALLENGES,
   ].forEach((key) => localStorage.removeItem(key));
 
+  const profile = getProfile();
+  profile.startDate = todayISO();
+  profile.streakStart = todayISO();
+  profile.cycle = 1;
+  profile.mode = 'standard';
+  saveProfile(profile);
+
   const settings = getSettings();
   settings.fasts = [];
   settings.lastBackupAt = null;

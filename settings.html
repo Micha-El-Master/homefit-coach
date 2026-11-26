@@ -154,7 +154,7 @@
     <p style="font-size:12px; color:var(--text-muted); margin:10px 0 0;">⚠️ Importer remplace toutes les données de cet appareil.</p>
     <div style="border-top:1px solid var(--border); margin-top:16px; padding-top:14px;">
       <h3 style="margin:0 0 6px;">Réinitialiser</h3>
-      <p style="font-size:12px; color:var(--text-muted); margin:0 0 10px;">La progression comprend les séances, l’historique Kegel, les défis, l’hydratation, la récupération, les jeûnes et les ajustements d’exercices. Ton profil, ton programme, tes préférences et ta liste de courses seront conservés.</p>
+      <p style="font-size:12px; color:var(--text-muted); margin:0 0 10px;">La progression comprend les séances, l’historique Kegel, les défis, l’hydratation, la récupération, les jeûnes et les ajustements d’exercices. Un nouveau cycle de 12 semaines démarre aujourd’hui ; ton profil, ton objectif, ton niveau, tes préférences et ta liste de courses sont conservés.</p>
       <button class="btn btn-outline" id="reset-progress-btn" style="margin-bottom:10px; border-color:var(--danger); color:var(--danger);">🔄 Réinitialiser ma progression</button>
       <button class="btn btn-outline" id="erase-all-btn" style="border-color:var(--danger); color:var(--danger);">🗑️ Tout effacer et recommencer</button>
       <p style="font-size:12px; color:var(--text-muted); margin:8px 0 0;">Ces actions sont définitives. Pense à exporter tes données avant de continuer.</p>
@@ -331,7 +331,7 @@
   });
 
   document.getElementById('reset-progress-btn').addEventListener('click', () => {
-    if (!confirm('Réinitialiser ta progression ? Les séances, historiques Kegel, défis, hydratation, récupération, jeûnes et ajustements d’exercices seront supprimés. Ton profil, ton programme et tes préférences seront conservés.')) return;
+    if (!confirm('Réinitialiser ta progression ? Les séances, historiques Kegel, défis, hydratation, récupération, jeûnes et ajustements d’exercices seront supprimés. Un nouveau cycle de 12 semaines commencera aujourd’hui ; ton profil et tes préférences seront conservés.')) return;
     resetProgression();
     location.reload();
   });
