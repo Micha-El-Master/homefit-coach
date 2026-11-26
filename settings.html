@@ -48,6 +48,22 @@
   </div>
 
   <div class="card">
+    <h2>Précautions physiques</h2>
+    <p style="font-size:13px; color:var(--text-muted); margin:-4px 0 12px;">Tu peux modifier ou supprimer ces précautions à tout moment. Elles restent sur cet appareil et ne constituent pas un avis médical.</p>
+    <div id="safety-settings">
+      <label class="meal-card"><input type="checkbox" data-safety="knees" /> Genoux ou jambes</label>
+      <label class="meal-card"><input type="checkbox" data-safety="back" /> Bas du dos</label>
+      <label class="meal-card"><input type="checkbox" data-safety="shoulders" /> Épaules ou bras</label>
+      <label class="meal-card"><input type="checkbox" data-safety="balance" /> Équilibre</label>
+      <label class="meal-card"><input type="checkbox" data-safety="mobility" /> Mobilité limitée</label>
+      <label class="meal-card"><input type="checkbox" data-safety="professional_advice" /> Avis professionnel recommandé</label>
+      <label class="meal-card"><input type="checkbox" data-safety="chest_symptoms" /> Symptômes thoraciques ou difficulté respiratoire</label>
+      <label class="meal-card"><input type="checkbox" data-safety-prefer /> Je préfère ne pas répondre</label>
+    </div>
+    <button type="button" class="btn btn-secondary" id="safety-save" style="margin-top:12px;">Enregistrer les précautions</button>
+  </div>
+
+  <div class="card">
     <h2>Apparence et accessibilité</h2>
     <div class="settings-row">
       <div>
@@ -174,6 +190,7 @@
 <nav class="bottom-nav" id="bottom-nav" aria-label="Navigation principale"></nav>
 
 <script src="js/storage.js"></script>
+<script src="js/safety.js"></script>
 <script src="js/exercises.js"></script>
 <script src="js/timer.js"></script>
 <script src="js/app.js"></script>
@@ -271,6 +288,38 @@
 
   const profile0 = getProfile();
   document.getElementById('profile-name').textContent = profile0.name;
+  const safetyContainer = document.getElementById('safety-settings');
+  const initialSafety = normalizeSafetyProfile(profile0);
+  safetyContainer.querySelectorAll('[data-safety]').forEach((box) => {
+    box.checked = initialSafety.limitations.includes(box.dataset.safety);
+  });
+  const preferSafetyBox = safetyContainer.querySelector('[data-safety-prefer]');
+  preferSafetyBox.checked = initialSafety.preferNot;
+  safetyContainer.addEventListener('change', (event) => {
+    if (event.target === preferSafetyBox && preferSafetyBox.checked) {
+      safetyContainer.querySelectorAll('[data-safety]').forEach((box) => { box.checked = false; });
+    } else if (event.target.matches('[data-safety]') && event.target.checked) {
+      preferSafetyBox.checked = false;
+    }
+  });
+  document.getElementById('safety-save').addEventListener('click', () => {
+    const limitations = [...safetyContainer.querySelectorAll('[data-safety]:checked')].map((box) => box.dataset.safety);
+    const preferNot = preferSafetyBox.checked;
+    const responded = preferNot || limitations.length > 0;
+    const profile = getProfile();
+    profile.safety = {
+      responded,
+      preferNot,
+      limitations: preferNot ? [] : limitations,
+      returnAfterPause: profile.safety && profile.safety.returnAfterPause === true,
+      professionalAdvice: limitations.includes('professional_advice'),
+    };
+    if (saveProfile(profile)) {
+      showStatus('✔ Précautions enregistrées sur cet appareil.', true);
+    } else {
+      showStatus('❌ Impossible d’enregistrer les précautions.', false);
+    }
+  });
   const goalSelect = document.getElementById('goal-select');
   const levelSelect = document.getElementById('level-select');
   goalSelect.value = profile0.goal;

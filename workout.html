@@ -164,6 +164,7 @@
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="js/storage.js"></script>
+<script src="js/safety.js"></script>
 <script src="js/exercises.js"></script>
 <script src="js/illustrations.js"></script>
 <script src="js/workouts.js"></script>
@@ -255,6 +256,10 @@
     if (today.fastNote) notes.push(`🌿 <strong>Jeûne communautaire</strong> — ${today.fastNote}`);
     if (today.goalNote) notes.push(`🎯 ${today.goalNote}`);
     if (today.equipmentNote) notes.push(`🧰 ${today.equipmentNote}`);
+    if (today.safetyNote) notes.push(`🛡️ ${today.safetyNote}`);
+    if (typeof getSafetyWarnings === 'function') {
+      getSafetyWarnings(profile).forEach((warning) => notes.push(`🛡️ ${warning}`));
+    }
     if (today.phase.label) notes.push(`<strong>Semaine ${today.week}/${TOTAL_WEEKS}</strong> — ${today.phase.label}`);
     if (today.feeling === 'dur') notes.push('Tes dernières séances étaient dures : celle-ci est un peu allégée.');
     if (today.feeling === 'facile') notes.push('Tes dernières séances étaient faciles : celle-ci est un peu plus intense.');

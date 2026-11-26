@@ -358,7 +358,13 @@ function getTodayWorkout(profile, title) {
   const feeling = getFeelingTrend();
   const fastPhase = fastPhaseOn(todayISO());
   const volume = fastPhase && fastPhase.phase === 'refeed' ? fastPhase.factor : 1;
-  const equipped = applyEquipment(applyGoalVariant(day, goal), getSettings().equipment);
+  let planned = applyGoalVariant(day, goal);
+  let safetyResult = { exercises: planned, blocked: 0, replaced: 0, unknown: 0 };
+  if (typeof applySafetyToExercises === 'function') {
+    safetyResult = applySafetyToExercises(planned, profile);
+  }
+  planned = safetyResult.exercises;
+  const equipped = applyEquipment(planned, getSettings().equipment);
 
   let equipmentNote = null;
   if (equipped.replaced || equipped.dropped) {
@@ -366,6 +372,13 @@ function getTodayWorkout(profile, title) {
     if (equipped.replaced) parts.push(`${equipped.replaced} exercice${equipped.replaced > 1 ? 's' : ''} remplacé${equipped.replaced > 1 ? 's' : ''}`);
     if (equipped.dropped) parts.push(`${equipped.dropped} retiré${equipped.dropped > 1 ? 's' : ''}`);
     equipmentNote = `Selon ton matériel : ${parts.join(', ')}. Ajoute du matériel dans les réglages pour retrouver la séance complète.`;
+  }
+  let safetyNote = null;
+  if (safetyResult.replaced || safetyResult.blocked || safetyResult.unknown) {
+    const safetyParts = [];
+    if (safetyResult.replaced) safetyParts.push(`${safetyResult.replaced} exercice${safetyResult.replaced > 1 ? 's' : ''} remplacé${safetyResult.replaced > 1 ? 's' : ''} par une option connue`);
+    if (safetyResult.blocked || safetyResult.unknown) safetyParts.push(`${safetyResult.blocked + safetyResult.unknown} exercice${safetyResult.blocked + safetyResult.unknown > 1 ? 's' : ''} retiré${safetyResult.blocked + safetyResult.unknown > 1 ? 's' : ''} pour prudence`);
+    safetyNote = `Précautions prises en compte : ${safetyParts.join(', ')}.`;
   }
 
   return {
@@ -376,6 +389,7 @@ function getTodayWorkout(profile, title) {
     feeling,
     goalNote: GOAL_NOTES[goal] || null,
     equipmentNote,
+    safetyNote,
     fastNote: getFastNote(fastPhase),
     exercises: equipped.exercises.map((ex) => scaleExercise(ex, level, week, feeling, mode, volume)),
   };

@@ -10,6 +10,7 @@ const ASSETS = [
   'css/style.css',
   'js/app.js',
   'js/storage.js',
+  'js/safety.js',
   'js/workouts.js',
   'js/exercises.js',
   'js/timer.js',

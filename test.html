@@ -50,6 +50,7 @@
     <div class="card lt-intro">
       <p class="lt-hint">Ce test propose seulement trois épreuves courtes pour estimer un niveau prudent. Il ne mesure pas tes limites et ne remplace pas un examen médical.</p>
       <p class="lt-hint">Commence uniquement si tu te sens bien. Tu peux arrêter ou ignorer chaque épreuve à tout moment.</p>
+      <p class="lt-hint" id="lt-safety-precheck" style="display:none;color:var(--danger);font-weight:700;"></p>
       <ul class="lt-list">
         <li>8 squats contrôlés maximum</li>
         <li>5 pompes sur les genoux maximum</li>
@@ -134,6 +135,7 @@
 </div>
 
 <script src="js/storage.js"></script>
+<script src="js/safety.js"></script>
 <script src="js/exercises.js"></script>
 <script src="js/workouts.js"></script>
 <script src="js/app.js"></script>
@@ -341,6 +343,23 @@
     $('view-test').hidden = false;
     renderStep();
   });
+
+  const profileForSafety = getProfile();
+  if (typeof getSafetyWarnings === 'function') {
+    const relevantWarnings = getSafetyWarnings(profileForSafety).filter((warning) =>
+      warning.includes('thoracique') || warning.includes('professionnel') || warning.includes('précaution')
+    );
+    if (relevantWarnings.length) {
+      $('lt-safety-precheck').style.display = 'block';
+      $('lt-safety-precheck').textContent = relevantWarnings.join(' ');
+    }
+  }
+  const testSafety = normalizeSafetyProfile(profileForSafety);
+  if (testSafety.limitations.includes('chest_symptoms') || testSafety.limitations.includes('professional_advice')) {
+    $('lt-start').disabled = true;
+    $('lt-start').textContent = 'Test suspendu par précaution';
+  }
+
   $('lt-intro-skip').addEventListener('click', (e) => {
     e.preventDefault();
     location.href = onboarding ? 'dashboard.html' : 'settings.html';

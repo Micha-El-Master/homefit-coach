@@ -84,6 +84,12 @@
     <a id="recovery-link" class="btn btn-outline" href="workout.html?s=R%C3%A9cup%C3%A9ration" style="display:none; margin-top:10px;">🧘 Séance de récupération (~8 min)</a>
   </div>
 
+  <div class="card" id="safety-dashboard-card" style="display:none; border:1.5px solid var(--primary);">
+    <h2>Précautions prises en compte</h2>
+    <p id="safety-dashboard-text" style="font-size:13px; margin:0 0 10px; line-height:1.5;"></p>
+    <a href="settings.html" class="btn btn-secondary" style="padding:10px; font-size:13px;">Modifier mes précautions</a>
+  </div>
+
   <div class="card">
     <h2>📅 Ma semaine</h2>
     <div class="week-strip" id="week-strip"></div>
@@ -118,6 +124,7 @@
 <nav class="bottom-nav" id="bottom-nav" aria-label="Navigation principale"></nav>
 
 <script src="js/storage.js"></script>
+<script src="js/safety.js"></script>
 <script src="js/exercises.js"></script>
 <script src="js/workouts.js"></script>
 <script src="js/challenges.js"></script>
@@ -206,6 +213,15 @@
 
   finalizeChallenges();
   const profile = getProfile();
+  if (typeof getSafetyWarnings === 'function') {
+    const safetyWarnings = getSafetyWarnings(profile).filter((warning) =>
+      !warning.startsWith('Écoute ton corps')
+    );
+    if (normalizeSafetyProfile(profile).responded && safetyWarnings.length) {
+      document.getElementById('safety-dashboard-card').style.display = 'block';
+      document.getElementById('safety-dashboard-text').textContent = safetyWarnings.slice(0, 3).join(' ');
+    }
+  }
   const progress = getProgramProgress();
   const today = getTodayWorkout(profile);
 

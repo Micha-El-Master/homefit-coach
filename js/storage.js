@@ -571,6 +571,19 @@ function validateImportData(data) {
       && (!Number.isFinite(migrated.profile.levelScore) || migrated.profile.levelScore < 1 || migrated.profile.levelScore > 10)) {
     throw new Error('Score de niveau invalide');
   }
+  if (migrated.profile.safety !== undefined) {
+    const safety = migrated.profile.safety;
+    const allowed = ['knees', 'back', 'shoulders', 'balance', 'mobility', 'professional_advice', 'chest_symptoms'];
+    if (!isPlainObject(safety)
+        || (safety.responded !== undefined && typeof safety.responded !== 'boolean')
+        || (safety.preferNot !== undefined && typeof safety.preferNot !== 'boolean')
+        || (safety.returnAfterPause !== undefined && typeof safety.returnAfterPause !== 'boolean')
+        || (safety.professionalAdvice !== undefined && typeof safety.professionalAdvice !== 'boolean')
+        || (safety.limitations !== undefined && (!Array.isArray(safety.limitations)
+          || safety.limitations.some((id) => typeof id !== 'string' || !allowed.includes(id))))) {
+      throw new Error('Précautions physiques invalides');
+    }
+  }
   if (migrated.profile.body !== undefined) {
     const body = migrated.profile.body;
     if (!isPlainObject(body)

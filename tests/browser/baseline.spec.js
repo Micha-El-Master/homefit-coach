@@ -141,3 +141,14 @@ test('test de niveau submaximal présente introduction et arrêt sécuritaire', 
   await expect(page.locator('#view-result')).toBeVisible();
   await expect(page.getByText('Test interrompu · niveau prudent')).toBeVisible();
 });
+
+test('précautions peuvent être enregistrées depuis les réglages', async ({ page }) => {
+  await installTestProfile(page);
+  await page.goto('/settings.html');
+
+  await page.locator('#safety-settings [data-safety="knees"]').check();
+  await page.locator('#safety-save').click();
+  const safety = await page.evaluate(() => JSON.parse(localStorage.getItem('hfc_profile')).safety);
+  expect(safety.responded).toBe(true);
+  expect(safety.limitations).toContain('knees');
+});

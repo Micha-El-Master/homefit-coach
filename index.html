@@ -62,6 +62,21 @@
     </div>
 
     <details class="form-group" style="margin-bottom:16px;">
+      <summary style="cursor:pointer; font-weight:600; font-size:14px;">Précautions physiques (facultatif)</summary>
+      <p style="font-size:12px; color:var(--text-muted); line-height:1.5;">Ces informations restent sur cet appareil. Elles permettent d’éviter certaines recommandations incompatibles, mais ne constituent pas un avis médical.</p>
+      <div id="onboarding-safety">
+        <label class="meal-card"><input type="checkbox" data-safety="knees" /> Genoux ou jambes</label>
+        <label class="meal-card"><input type="checkbox" data-safety="back" /> Bas du dos</label>
+        <label class="meal-card"><input type="checkbox" data-safety="shoulders" /> Épaules ou bras</label>
+        <label class="meal-card"><input type="checkbox" data-safety="balance" /> Équilibre</label>
+        <label class="meal-card"><input type="checkbox" data-safety="mobility" /> Mobilité limitée</label>
+        <label class="meal-card"><input type="checkbox" data-safety="professional_advice" /> Un professionnel a conseillé de limiter certains efforts</label>
+        <label class="meal-card"><input type="checkbox" data-safety="chest_symptoms" /> Symptômes thoraciques ou difficulté respiratoire inhabituelle</label>
+        <label class="meal-card"><input type="checkbox" data-safety-prefer /> Je préfère ne pas répondre</label>
+      </div>
+    </details>
+
+    <details class="form-group" style="margin-bottom:16px;">
       <summary style="cursor:pointer; font-weight:600; font-size:14px;">Calculer mes besoins nutritionnels (facultatif)</summary>
       <div class="option-grid" style="margin:12px 0;">
         <div class="form-group" style="margin:0;"><label for="b-weight">Poids (kg)</label><input class="form-input" type="number" id="b-weight" min="30" max="250" step="0.1" /></div>
@@ -86,6 +101,7 @@
 </div>
 
 <script src="js/storage.js"></script>
+<script src="js/safety.js"></script>
 <script src="js/exercises.js"></script>
 <script src="js/community.js"></script>
 <script src="js/app.js"></script>
@@ -204,6 +220,19 @@
         age,
         sex: document.getElementById('b-sex').value,
         activity: Number(document.getElementById('b-activity').value),
+      };
+    }
+
+    const safetyLimitations = [...document.querySelectorAll('#onboarding-safety [data-safety]:checked')].map((box) => box.dataset.safety);
+    const preferNot = !!document.querySelector('#onboarding-safety [data-safety-prefer]:checked');
+    const responded = preferNot || safetyLimitations.length > 0;
+    if (responded) {
+      profile.safety = {
+        responded: true,
+        preferNot,
+        limitations: preferNot ? [] : safetyLimitations,
+        returnAfterPause: false,
+        professionalAdvice: safetyLimitations.includes('professional_advice'),
       };
     }
 
