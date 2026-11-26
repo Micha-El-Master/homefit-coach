@@ -362,6 +362,7 @@
   let queueIndex = 0;
   let sessionStart = null;
   let activeTimer = null;
+  let restoredTimerState = null;
   const exerciseTally = {};
   const setLog = {};
   let repsDone = 0;
@@ -414,6 +415,7 @@
     Object.assign(exerciseTally, saved.tally);
     Object.assign(setLog, saved.setLog || {});
     sessionStart = Date.now() - saved.elapsedMs;
+    restoredTimerState = saved.timerState || null;
     acquireWakeLock();
     runStep();
   }
@@ -431,6 +433,9 @@
       tally: exerciseTally,
       setLog,
       elapsedMs: Date.now() - sessionStart,
+      timerState: activeTimer && typeof activeTimer.getState === 'function'
+        ? { type: activeTimer.timerType || 'countdown', ...activeTimer.getState() }
+        : null,
     });
   }
 
@@ -455,7 +460,14 @@
     speak(`Repos, ${REST_SECONDS} secondes. Prochain exercice : ${nextName}.`);
     const el = document.getElementById('rest-timer');
     if (activeTimer) activeTimer.cancel();
-    activeTimer = createCountdown(REST_SECONDS, {
+    let remaining = REST_SECONDS;
+    if (restoredTimerState && restoredTimerState.type === 'rest') {
+      remaining = restoredTimerState.paused
+        ? restoredTimerState.remaining
+        : Math.max(0, Math.ceil((restoredTimerState.deadline - Date.now()) / 1000));
+    }
+    restoredTimerState = null;
+    activeTimer = createCountdown(remaining, {
       onTick: (remaining) => {
         el.textContent = formatTime(Math.max(0, remaining));
         el.classList.toggle('urgent', remaining <= 3 && remaining > 0);
@@ -465,7 +477,9 @@
         runStep();
       },
     });
+    activeTimer.timerType = 'rest';
     activeTimer.start();
+    persistProgress();
 
     document.getElementById('skip-rest-btn').onclick = () => {
       activeTimer.cancel();
@@ -502,7 +516,14 @@
       document.getElementById('reps-stepper').style.display = 'none';
       timerEl.textContent = formatTime(ex.holdSeconds);
       if (!silent) speak(`${data.name}. ${ex.holdSeconds} secondes.`);
-      activeTimer = createCountdown(ex.holdSeconds, {
+      let remaining = ex.holdSeconds;
+      if (restoredTimerState && restoredTimerState.type === 'hold') {
+        remaining = restoredTimerState.paused
+          ? restoredTimerState.remaining
+          : Math.max(0, Math.ceil((restoredTimerState.deadline - Date.now()) / 1000));
+      }
+      restoredTimerState = null;
+      activeTimer = createCountdown(remaining, {
         onTick: (remaining) => {
           timerEl.textContent = formatTime(Math.max(0, remaining));
           timerEl.classList.toggle('urgent', remaining <= 3 && remaining > 0);
@@ -516,7 +537,9 @@
           runStep();
         },
       });
+      activeTimer.timerType = 'hold';
       activeTimer.start();
+      persistProgress();
     } else {
       const reps = ex.perLeg ? `${ex.reps} répétitions / jambe` : `${ex.reps} répétitions`;
       targetEl.textContent = reps;
@@ -571,16 +594,21 @@
   }
 
   function pauseSession() {
-    if (activeTimer) activeTimer.cancel();
+    let pausedTimer = null;
+    if (activeTimer) pausedTimer = activeTimer.pause();
+    persistProgress();
     if (confirm('Mettre la séance en pause ? Tu pourras la reprendre depuis la page Séance.')) {
       releaseWakeLock();
       location.href = 'dashboard.html';
     } else {
-      runStep();
+      if (activeTimer && typeof activeTimer.resume === 'function') {
+        activeTimer.resume(pausedTimer);
+      }
     }
   }
 
   function finishSession() {
+    if (activeTimer) activeTimer.cancel();
     releaseWakeLock();
     clearInProgress();
     const durationMin = Math.max(1, Math.round((Date.now() - sessionStart) / 60000));

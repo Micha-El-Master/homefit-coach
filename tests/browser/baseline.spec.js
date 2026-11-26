@@ -17,6 +17,12 @@ async function installTestProfile(page) {
   await page.addInitScript((profile) => {
     localStorage.clear();
     localStorage.setItem('hfc_profile', JSON.stringify(profile));
+    localStorage.setItem('hfc_settings', JSON.stringify({
+      warmup: false,
+      cooldown: false,
+      restSeconds: 45,
+      trainingDays: [1, 2, 4, 5],
+    }));
   }, PROFILE);
 }
 
@@ -103,4 +109,20 @@ test('prévisualisation d’import peut être annulée sans remplacer les donné
 
   await expect(page.locator('#import-preview')).toBeHidden();
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('hfc_profile')).name)).toBe('Test Baseline');
+});
+
+test('séance lance un minuteur de repos basé sur une échéance', async ({ page }) => {
+  await installTestProfile(page);
+  await page.goto('/workout.html');
+
+  await expect(page.locator('#start-btn')).toBeVisible();
+  await page.locator('#start-btn').click();
+  await expect(page.locator('#view-work')).toBeVisible();
+  await page.locator('#work-done-btn').click();
+  await expect(page.locator('#view-rest')).toBeVisible();
+
+  const timerText = await page.locator('#rest-timer').textContent();
+  expect(timerText).toMatch(/^\d{2}:\d{2}$/);
+  page.once('dialog', (dialog) => dialog.dismiss());
+  await page.locator('#rest-close').click();
 });
