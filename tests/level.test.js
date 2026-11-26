@@ -44,3 +44,57 @@ test('courbe de 12 semaines : monte, avec des semaines 4 et 8 allégées', () =>
   assert.ok(curve[11].factor > curve[0].factor);
   assert.ok(curve[3].factor < curve[2].factor);
 });
+
+test('résultat submaximal normal reste prudent', () => {
+  const app = createApp();
+  const r = app.run('computeLevelFromTests({ squats: 8, pompes: 5, gainage: 20, effort: "modere" })');
+  assert.ok(r.score >= 1 && r.score <= 10);
+  assert.deepStrictEqual(r.scores, { squats: 6, pompes: 6, gainage: 5 });
+});
+
+test('épreuves ignorées ou absentes restent conservatrices', () => {
+  const app = createApp();
+  assert.strictEqual(app.run('computeLevelFromTests({})').score, 1);
+  const skipped = app.run('computeLevelFromTests({ skipped: ["squats", "pompes", "gainage"] })');
+  assert.strictEqual(skipped.score, 2);
+});
+
+test('test incomplet sans pénalité en valeur nulle', () => {
+  const app = createApp();
+  const r = app.run('computeLevelFromTests({ squats: 8, skipped: ["pompes", "gainage"] })');
+  assert.ok(r.score >= 1 && r.score <= 4);
+  assert.strictEqual(r.scores.pompes, null);
+});
+
+test('difficulté importante ne monte jamais le niveau', () => {
+  const app = createApp();
+  const r = app.run('computeLevelFromTests({ squats: 8, pompes: 5, gainage: 20, effort: "difficile" })');
+  assert.strictEqual(r.score, 3);
+});
+
+test('arrêt ou signal de sécurité impose un niveau prudent', () => {
+  const app = createApp();
+  const interrupted = app.run('computeLevelFromTests({ squats: 8, pompes: 5, gainage: 20, interrupted: true })');
+  const safety = app.run('computeLevelFromTests({ safetyStop: true, safetySignal: "douleur" })');
+  assert.strictEqual(interrupted.score, 2);
+  assert.ok(safety.score >= 1 && safety.score <= 2);
+});
+
+test('ancien profil avec niveau valide reste compatible', () => {
+  const app = createApp();
+  app.profile({ level: 'intermediaire', levelScore: 6, levelTests: { squats: 18, pompes: 8, gainage: 30 } });
+  const profile = app.run('getProfile()');
+  assert.strictEqual(profile.levelScore, 6);
+  assert.strictEqual(profile.level, 'intermediaire');
+});
+
+test('nouveau protocole ne contient plus de test maximal ancien', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'test.html'), 'utf8');
+  assert.doesNotMatch(html, /60 secondes/);
+  assert.doesNotMatch(html, /jusqu.?à épuisement/);
+  assert.doesNotMatch(html, /Combien de pompes sur les genoux d.affilée/);
+  assert.match(html, /8 squats contrôlés maximum/);
+  assert.match(html, /Arrêter le test maintenant/);
+});

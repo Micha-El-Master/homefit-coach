@@ -126,3 +126,18 @@ test('séance lance un minuteur de repos basé sur une échéance', async ({ pag
   page.once('dialog', (dialog) => dialog.dismiss());
   await page.locator('#rest-close').click();
 });
+
+test('test de niveau submaximal présente introduction et arrêt sécuritaire', async ({ page }) => {
+  await installTestProfile(page);
+  await page.goto('/test.html');
+
+  await expect(page.locator('#view-intro')).toBeVisible();
+  await expect(page.locator('#view-intro').getByText('8 squats contrôlés maximum')).toBeVisible();
+  await page.locator('#lt-start').click();
+  await expect(page.locator('#lt-title')).toHaveText('8 squats contrôlés maximum');
+  await expect(page.locator('#lt-stop')).toBeVisible();
+
+  await page.locator('[data-safety="douleur"]').click();
+  await expect(page.locator('#view-result')).toBeVisible();
+  await expect(page.getByText('Test interrompu · niveau prudent')).toBeVisible();
+});

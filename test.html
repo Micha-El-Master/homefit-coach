@@ -34,10 +34,31 @@
   .lt-row:last-child { border-bottom: none; }
   .lt-skip { display: block; text-align: center; font-size: 14px; color: var(--text-muted); text-decoration: underline; padding: 12px; margin-top: 8px; }
   .lt-hint { font-size: 14px; line-height: 1.45; color: var(--text-muted); margin: 0 0 16px; }
+  .lt-intro { margin-bottom: 16px; }
+  .lt-feelings { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:8px; margin:12px 0; }
+  .lt-feelings button { width:100%; padding:10px 6px; font-size:13px; }
+  .lt-safety { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+  .lt-safety button { width:auto; flex:1 1 45%; padding:9px 8px; font-size:12px; }
+  .lt-stop { width:100%; margin-top:10px; border-color:var(--danger); color:var(--danger); }
 </style>
 </head>
 <body>
 <div class="app-shell" role="main">
+  <section id="view-intro" aria-live="polite">
+    <p class="lt-eyebrow">Test de départ · sans matériel obligatoire</p>
+    <h1 style="margin:0 0 8px;">On commence doucement</h1>
+    <div class="card lt-intro">
+      <p class="lt-hint">Ce test propose seulement trois épreuves courtes pour estimer un niveau prudent. Il ne mesure pas tes limites et ne remplace pas un examen médical.</p>
+      <p class="lt-hint">Commence uniquement si tu te sens bien. Tu peux arrêter ou ignorer chaque épreuve à tout moment.</p>
+      <ul class="lt-list">
+        <li>8 squats contrôlés maximum</li>
+        <li>5 pompes sur les genoux maximum</li>
+        <li>20 secondes de gainage maximum</li>
+      </ul>
+    </div>
+    <button type="button" class="btn btn-primary" id="lt-start">Commencer le test</button>
+    <a href="#" class="lt-skip" id="lt-intro-skip">Passer le test et garder mon niveau actuel</a>
+  </section>
   <section id="view-test" aria-live="polite">
     <p class="lt-eyebrow" id="lt-eyebrow"></p>
     <div class="lt-steps" id="lt-steps" aria-hidden="true"></div>
@@ -57,6 +78,23 @@
         <button type="button" id="lt-plus" aria-label="Plus un">+</button>
       </div>
       <p id="lt-unit" style="text-align:center; font-size:13px; color:var(--text-muted); margin:0;"></p>
+    </div>
+
+    <div class="card">
+      <strong>Comment te sens-tu pendant cette épreuve ?</strong>
+      <div class="lt-feelings" id="lt-feelings">
+        <button type="button" class="btn btn-secondary" data-feeling="tres_facile">Très facile</button>
+        <button type="button" class="btn btn-secondary" data-feeling="facile">Facile</button>
+        <button type="button" class="btn btn-secondary" data-feeling="modere">Modéré</button>
+        <button type="button" class="btn btn-secondary" data-feeling="difficile">Difficile</button>
+      </div>
+      <div class="lt-safety">
+        <button type="button" class="btn btn-outline" data-safety="douleur">Douleur</button>
+        <button type="button" class="btn btn-outline" data-safety="malaise">Malaise</button>
+        <button type="button" class="btn btn-outline" data-safety="vertige">Vertige</button>
+        <button type="button" class="btn btn-outline" data-safety="essoufflement">Essoufflement inhabituel</button>
+      </div>
+      <button type="button" class="btn btn-outline lt-stop" id="lt-stop">Arrêter le test maintenant</button>
     </div>
 
     <ul class="lt-list" id="lt-list"></ul>
@@ -106,14 +144,17 @@
   let value = 0;
   let timerId = null;
   let elapsed = 0;
+  let interrupted = false;
+  let selectedFeeling = null;
+  let selectedSafety = null;
 
   const $ = (id) => document.getElementById(id);
   const fmt = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 
   const STEPS = [
-    { test: LEVEL_TESTS[0], title: 'Combien de squats en 60 secondes ?', help: 'Fais-en autant que tu peux avec une bonne forme. Arrête-toi dès que ça se dégrade. Il n’y a pas de mauvais résultat.', timer: 'down', seconds: 60 },
-    { test: LEVEL_TESTS[1], title: 'Combien de pompes sur les genoux d’affilée ?', help: 'Mains sous les épaules, dos droit. Compte les répétitions faites sans t’arrêter, puis note ton résultat.', timer: null },
-    { test: LEVEL_TESTS[2], title: 'Combien de temps tiens-tu le gainage ?', help: 'Sur les avant-bras, corps aligné. Lance le chrono et arrête-toi quand le dos se creuse.', timer: 'up' },
+    { test: LEVEL_TESTS[0], title: '8 squats contrôlés maximum', help: 'Pieds largeur des épaules. Descends seulement jusqu’à une profondeur confortable, garde le dos stable et arrête-toi avant la fatigue. Tu peux faire moins de 8.', timer: null, max: 8 },
+    { test: LEVEL_TESTS[1], title: '5 pompes sur les genoux maximum', help: 'Position sur les genoux si nécessaire, mains sous les épaules. Fais autant que tu veux sans forcer. Arrête-toi avant de perdre la bonne forme.', timer: null, max: 5, alternate: 'Tu peux rester sur tes genoux.' },
+    { test: LEVEL_TESTS[2], title: '20 secondes de gainage maximum', help: 'Sur les avant-bras, corps aligné sans cambrer. Lance le chrono seulement si tu te sens bien. Dix secondes sont déjà suffisantes ; tu peux arrêter avant 20 secondes.', timer: 'down', seconds: 20, max: 20 },
   ];
 
   function stopTimer() {
@@ -122,7 +163,7 @@
   }
 
   function setValue(v) {
-    const max = STEPS[step].test.max;
+    const max = STEPS[step].max;
     value = Math.min(max, Math.max(0, v));
     $('lt-value').textContent = value;
   }
@@ -130,20 +171,30 @@
   function renderStep() {
     stopTimer();
     const s = STEPS[step];
+    selectedFeeling = null;
+    selectedSafety = null;
     $('lt-eyebrow').textContent = `Ton point de départ · Test ${step + 1} sur ${STEPS.length}`;
     $('lt-steps').innerHTML = STEPS.map((_, i) => `<span class="${i < step ? 'done' : i === step ? 'current' : ''}"></span>`).join('');
     $('lt-title').textContent = s.title;
     $('lt-help').textContent = s.help;
     $('lt-unit').textContent = s.test.unit;
     $('lt-list').innerHTML = STEPS.map(
-      (t, i) => `<li class="${i < step ? 'done' : i === step ? 'current' : ''}">${i + 1} · ${t.test.label}${i < step ? ` : ${results[t.test.id]}` : ''}</li>`
+      (t, i) => `<li class="${i < step ? 'done' : i === step ? 'current' : ''}">${i + 1} · ${t.test.label}${i < step ? ` : ${results[t.test.id] === undefined ? 'pas réalisé' : results[t.test.id]}` : ''}</li>`
     ).join('');
     $('lt-next').textContent = step === STEPS.length - 1 ? 'Voir mon niveau' : 'Test suivant';
+    document.querySelectorAll('#lt-feelings button').forEach((button) => {
+      button.classList.remove('btn-primary');
+      button.classList.add('btn-secondary');
+    });
+    document.querySelectorAll('[data-safety]').forEach((button) => {
+      button.classList.remove('btn-primary');
+      button.classList.add('btn-outline');
+    });
     const hasTimer = !!s.timer;
     $('lt-timer-card').hidden = !hasTimer;
     if (hasTimer) {
       elapsed = 0;
-      $('lt-timer').textContent = s.timer === 'down' ? fmt(s.seconds) : fmt(0);
+      $('lt-timer').textContent = fmt(s.seconds);
       $('lt-timer-btn').textContent = 'Lancer le chrono';
     }
     setValue(results[s.test.id] ?? 0);
@@ -153,23 +204,19 @@
     const s = STEPS[step];
     if (timerId) {
       stopTimer();
-      $('lt-timer-btn').textContent = 'Relancer le chrono';
-      if (s.timer === 'up') setValue(elapsed);
+      $('lt-timer-btn').textContent = 'Reprendre quelques secondes';
+      setValue(elapsed);
       return;
     }
     elapsed = 0;
     $('lt-timer-btn').textContent = 'Arrêter';
     timerId = setInterval(() => {
       elapsed += 1;
-      if (s.timer === 'down') {
-        $('lt-timer').textContent = fmt(Math.max(0, s.seconds - elapsed));
-        if (elapsed >= s.seconds) {
-          stopTimer();
-          $('lt-timer-btn').textContent = 'Relancer le chrono';
-        }
-      } else {
-        $('lt-timer').textContent = fmt(elapsed);
-        setValue(elapsed);
+      setValue(elapsed);
+      $('lt-timer').textContent = fmt(Math.max(0, s.seconds - elapsed));
+      if (elapsed >= s.seconds) {
+        stopTimer();
+        $('lt-timer-btn').textContent = 'Maximum atteint · tu peux continuer';
       }
     }, 1000);
   });
@@ -177,8 +224,41 @@
   $('lt-minus').addEventListener('click', () => setValue(value - 1));
   $('lt-plus').addEventListener('click', () => setValue(value + 1));
 
+  document.getElementById('lt-feelings').addEventListener('click', (e) => {
+    const button = e.target.closest('[data-feeling]');
+    if (!button) return;
+    selectedFeeling = button.dataset.feeling;
+    document.querySelectorAll('#lt-feelings button').forEach((b) => {
+      b.classList.remove('btn-primary');
+      b.classList.add('btn-secondary');
+    });
+    button.classList.remove('btn-secondary');
+    button.classList.add('btn-primary');
+  });
+
+  document.querySelectorAll('[data-safety]').forEach((button) => {
+    button.addEventListener('click', () => {
+      stopTimer();
+      selectedSafety = button.dataset.safety;
+      interrupted = true;
+      results.safetyStop = true;
+      results.safetySignal = selectedSafety;
+      showResult();
+    });
+  });
+
+  $('lt-stop').addEventListener('click', () => {
+    stopTimer();
+    interrupted = true;
+    results.interrupted = true;
+    showResult();
+  });
+
   $('lt-next').addEventListener('click', () => {
     results[STEPS[step].test.id] = value;
+    if (selectedFeeling) results.effort = selectedFeeling === 'difficile' ? 'difficile' : selectedFeeling;
+    results.completedTests = results.completedTests || [];
+    if (!results.completedTests.includes(STEPS[step].test.id)) results.completedTests.push(STEPS[step].test.id);
     if (step < STEPS.length - 1) {
       step += 1;
       renderStep();
@@ -189,21 +269,36 @@
 
   $('lt-skip').addEventListener('click', (e) => {
     e.preventDefault();
-    location.href = onboarding ? 'dashboard.html' : 'settings.html';
+    results.skipped = (results.skipped || []);
+    results.skipped.push(STEPS[step].test.id);
+    if (step < STEPS.length - 1) {
+      step += 1;
+      renderStep();
+    } else {
+      showResult();
+    }
   });
 
   let computed = null;
 
   function showResult() {
     stopTimer();
+    results.interrupted = interrupted || results.interrupted === true;
+    if (selectedFeeling === 'difficile') results.effort = 'difficile';
     computed = computeLevelFromTests(results);
     const { score, scores } = computed;
     $('view-test').hidden = true;
+    $('view-intro').hidden = true;
     $('view-result').hidden = false;
-    $('res-title').textContent = `Tu démarres au niveau ${score}`;
+    $('res-title').textContent = interrupted
+      ? 'Test interrompu · niveau prudent'
+      : `Tu démarres au niveau ${score}`;
     $('res-level').textContent = `Niveau ${score} sur ${LEVEL_MAX}`;
     $('res-name').textContent = levelNameFromScore(score);
     $('res-gauge').innerHTML = Array.from({ length: LEVEL_MAX }, (_, i) => `<span class="${i < score ? 'on' : ''}"></span>`).join('');
+    $('res-sub').textContent = interrupted
+      ? 'C’est parfaitement normal d’arrêter. Commence doucement, sans douleur ni malaise. Le niveau pourra évoluer avec l’entraînement.'
+      : 'On commence tout doucement. Le programme s’adapte à toi chaque semaine.';
 
     const curve = getLevelCurve(score);
     const top = Math.max(...curve.map((c) => c.factor));
@@ -212,9 +307,14 @@
     $('res-start').textContent = 'Semaine 1 · volume de départ';
     $('res-end').textContent = `Semaine 12 · +${gain} %`;
 
-    $('res-detail').innerHTML = LEVEL_TESTS.map(
-      (t) => `<div class="lt-row"><span>${t.label} · ${results[t.id]} ${t.unit === 'secondes' ? 's' : ''}</span><strong>Niveau ${scores[t.id]}</strong></div>`
-    ).join('');
+    $('res-detail').innerHTML = LEVEL_TESTS.map((t) => {
+      const status = results.skipped && results.skipped.includes(t.id)
+        ? 'Épreuve ignorée'
+        : results[t.id] === undefined
+          ? 'Pas réalisée'
+          : `${results[t.id]} ${t.unit === 'secondes' ? 's' : t.unit}`;
+      return `<div class="lt-row"><span>${t.label} · ${status}</span><strong>${scores[t.id] === null ? 'Prudent' : `Niveau ${scores[t.id]}`}</strong></div>`;
+    }).join('');
     $('res-save').textContent = onboarding ? 'Commencer la semaine 1' : 'Enregistrer mon niveau';
   }
 
@@ -228,11 +328,25 @@
     e.preventDefault();
     step = 0;
     Object.keys(results).forEach((k) => delete results[k]);
+    interrupted = false;
+    selectedFeeling = null;
+    selectedSafety = null;
     $('view-result').hidden = true;
-    $('view-test').hidden = false;
+    $('view-intro').hidden = false;
     renderStep();
   });
 
+  $('lt-start').addEventListener('click', () => {
+    $('view-intro').hidden = true;
+    $('view-test').hidden = false;
+    renderStep();
+  });
+  $('lt-intro-skip').addEventListener('click', (e) => {
+    e.preventDefault();
+    location.href = onboarding ? 'dashboard.html' : 'settings.html';
+  });
+
+  $('view-test').hidden = true;
   renderStep();
 </script>
 </body>

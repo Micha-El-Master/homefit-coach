@@ -1,14 +1,14 @@
 
 const LEVEL_FACTOR = { debutant: 0.8, intermediaire: 1, avance: 1.2 };
 
-// Niveau chiffré de 1 à 10, issu du test de départ : 3 mini-tests (squats en 60 s, pompes sur les genoux
-// en une série, gainage en secondes), chacun noté de 1 à 10 ; le niveau global est la moyenne arrondie.
+// Niveau chiffré de 1 à 10. Les nouveaux résultats proviennent d'épreuves submaximales courtes.
+// Les résultats anciens sont conservés pour la compatibilité des profils déjà enregistrés.
 const LEVEL_MIN = 1;
 const LEVEL_MAX = 10;
 const LEVEL_TESTS = [
-  { id: 'squats', label: 'Squats en 60 s', unit: 'répétitions', divisor: 5, max: 60 },
-  { id: 'pompes', label: 'Pompes sur les genoux', unit: 'répétitions', divisor: 3.5, max: 60 },
-  { id: 'gainage', label: 'Gainage sur les avant-bras', unit: 'secondes', divisor: 10, max: 180 },
+  { id: 'squats', label: 'Squats contrôlés', unit: 'répétitions', divisor: 5, max: 8, mode: 'submaximal' },
+  { id: 'pompes', label: 'Pompes sur les genoux', unit: 'répétitions', divisor: 3.5, max: 5, mode: 'submaximal' },
+  { id: 'gainage', label: 'Gainage sur les avant-bras', unit: 'secondes', divisor: 10, max: 20, mode: 'submaximal' },
 ];
 
 function clampLevel(n) {
@@ -19,17 +19,66 @@ function scoreLevelTest(testId, value) {
   const test = LEVEL_TESTS.find((t) => t.id === testId);
   const v = Number(value);
   if (!test || !Number.isFinite(v) || v < 0) return LEVEL_MIN;
-  return clampLevel(Math.min(v, test.max) / test.divisor);
+  if (v <= test.max) {
+    if (testId === 'squats') {
+      if (v >= 8) return 6;
+      if (v >= 5) return 4;
+      if (v >= 2) return 2;
+      return 1;
+    }
+    if (testId === 'pompes') {
+      if (v >= 5) return 6;
+      if (v >= 3) return 4;
+      if (v >= 1) return 2;
+      return 1;
+    }
+    if (testId === 'gainage') {
+      if (v >= 20) return 5;
+      if (v >= 15) return 4;
+      if (v >= 10) return 3;
+      if (v >= 5) return 2;
+      return 1;
+    }
+  }
+  return clampLevel(v / test.divisor);
 }
 
 // results : { squats, pompes, gainage } -> { score, scores: { squats, pompes, gainage } }
 function computeLevelFromTests(results) {
   const scores = {};
+  const safeResults = isPlainObject(results) ? results : {};
+  const completed = [];
+  let ignoredCount = 0;
+  const interrupted = safeResults.interrupted === true || safeResults.safetyStop === true;
+  const hardEffort = ['difficile', 'tres_difficile', 'arreter'].includes(safeResults.effort);
   LEVEL_TESTS.forEach((t) => {
-    scores[t.id] = scoreLevelTest(t.id, results[t.id]);
+    const value = safeResults[t.id];
+    if (value === undefined || value === null || value === '' || safeResults.skipped && safeResults.skipped.includes(t.id)) {
+      ignoredCount++;
+      scores[t.id] = null;
+      return;
+    }
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric) || numeric < 0) {
+      ignoredCount++;
+      scores[t.id] = null;
+      return;
+    }
+    scores[t.id] = scoreLevelTest(t.id, numeric);
+    completed.push(scores[t.id]);
   });
-  const mean = LEVEL_TESTS.reduce((sum, t) => sum + scores[t.id], 0) / LEVEL_TESTS.length;
-  return { score: clampLevel(mean), scores };
+  let score;
+  if (completed.length === 0) {
+    const skippedAll = Array.isArray(safeResults.skipped) && safeResults.skipped.length === LEVEL_TESTS.length;
+    score = skippedAll ? 2 : 1;
+  } else {
+    const mean = completed.reduce((sum, value) => sum + value, 0) / completed.length;
+    score = clampLevel(mean);
+  }
+  if (ignoredCount > 0) score = Math.min(score, ignoredCount === LEVEL_TESTS.length ? 2 : 4);
+  if (hardEffort) score = Math.min(score, 3);
+  if (interrupted) score = Math.min(score, 2);
+  return { score: clampLevel(score), scores };
 }
 
 // Les 10 niveaux vont de 0,60 (on commence tout petit) à 1,23 du volume de base.
