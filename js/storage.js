@@ -109,10 +109,10 @@ function getWeeklyTarget() {
   return getTrainingDays().length;
 }
 
-// Jeûne communautaire : liste de { start: 'AAAA-MM-JJ', days: 1 à 5 } choisie par l'utilisateur (réglages).
+// Jeûne communautaire : liste de { start: 'AAAA-MM-JJ', days: 1 à 14 } choisie par l'utilisateur (réglages).
 // Pendant le jeûne : séances remplacées par de la récupération douce ; ensuite reprise progressive (60 %, 70 %).
 const FAST_REFEED_FACTORS = [0.6, 0.7];
-const FAST_MAX_DAYS = 5;
+const FAST_MAX_DAYS = 14;
 
 function sanitizeFasts(list) {
   if (!Array.isArray(list)) return [];

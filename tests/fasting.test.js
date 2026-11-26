@@ -61,7 +61,7 @@ test('reprise : le volume de la séance est réduit, le jeûne affiche un messag
 
 test('jeûnes : validation, ajout, retrait, dédoublonnage', () => {
   const app = createApp({ now: new Date(2026, 9, 1, 12, 0, 0) });
-  app.settings({ fasts: [{ start: 'nimporte', days: 3 }, { start: '2026-10-14', days: 9 }, { start: '2026-10-14', days: 3 }, { start: '2026-10-14', days: 2 }] });
+  app.settings({ fasts: [{ start: 'nimporte', days: 3 }, { start: '2026-10-14', days: 15 }, { start: '2026-10-14', days: 3 }, { start: '2026-10-14', days: 2 }] });
   assert.deepStrictEqual(app.run('getFasts()'), [{ start: '2026-10-14', days: 3 }]);
   app.run("addFast('2026-11-04', 3)");
   app.run("addFast('2026-11-04', 2)");
@@ -72,10 +72,18 @@ test('jeûnes : validation, ajout, retrait, dédoublonnage', () => {
   assert.strictEqual(app.run("getUpcomingFast('2026-11-06')"), null);
 });
 
+test('jeûnes : accepte jusqu’à 14 jours, refuse toute durée supérieure', () => {
+  const app = withFast();
+  app.settings({ fasts: [{ start: '2026-10-14', days: 14 }, { start: '2026-11-01', days: 15 }] });
+  assert.deepStrictEqual(app.run('getFasts()'), [{ start: '2026-10-14', days: 14 }]);
+  assert.deepStrictEqual(phase(app, '2026-10-27'), { phase: 'fast', day: 14, factor: 0 });
+  assert.deepStrictEqual(phase(app, '2026-10-28'), { phase: 'refeed', day: 1, factor: 0.6 });
+});
+
 test('communaute.json : les jeûnes annoncés sont validés (durée 3 par défaut)', () => {
   const app = createApp();
-  const cfg = app.run("sanitizeCommunityConfig({ fasts: [{ start: '2026-12-02' }, { start: '2026-12-31', days: 3 }, { start: 'x' }, { start: '2027-01-06', days: 40 }] })");
-  assert.deepStrictEqual(cfg.fasts, [{ start: '2026-12-02', days: 3 }, { start: '2026-12-31', days: 3 }]);
+  const cfg = app.run("sanitizeCommunityConfig({ fasts: [{ start: '2026-12-02' }, { start: '2026-12-31', days: 3 }, { start: '2027-01-06', days: 14 }, { start: '2027-01-20', days: 15 }, { start: 'x' }, { start: '2027-02-01', days: 40 }] })");
+  assert.deepStrictEqual(cfg.fasts, [{ start: '2026-12-02', days: 3 }, { start: '2026-12-31', days: 3 }, { start: '2027-01-06', days: 14 }]);
   assert.deepStrictEqual(app.run('sanitizeCommunityConfig(null).fasts'), []);
 });
 

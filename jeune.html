@@ -84,8 +84,11 @@
       <div class="form-group" style="margin:0;"><label for="fast-days">Durée</label>
         <select class="form-select" id="fast-days">
           <option value="1">1 jour</option><option value="2">2 jours</option><option value="3" selected>3 jours</option><option value="4">4 jours</option><option value="5">5 jours</option>
+          <option value="6">6 jours</option><option value="7">7 jours</option><option value="8">8 jours</option><option value="9">9 jours</option><option value="10">10 jours</option>
+          <option value="11">11 jours</option><option value="12">12 jours</option><option value="13">13 jours</option><option value="14">14 jours</option>
         </select></div>
     </div>
+    <p style="font-size:12px; color:var(--danger); line-height:1.5; margin:-4px 0 10px;">⚠️ Un jeûne de plus de 5 jours peut présenter des risques importants. Demande un avis médical avant de l’envisager ; l’application ne remplace pas un suivi médical.</p>
     <p id="fast-error" role="alert" style="display:none; color:var(--danger); font-size:13px; font-weight:600; margin:0 0 10px;"></p>
     <button type="button" class="btn btn-secondary" id="fast-add">Ajouter ce jeûne</button>
   </div>
@@ -113,6 +116,10 @@
     });
     children.forEach((c) => node.appendChild(c));
     return node;
+  }
+
+  function confirmLongFast(days) {
+    return days <= 5 || confirm('Attention : un jeûne de plus de 5 jours peut présenter des risques importants et nécessite un avis médical. L’application ne remplace pas un suivi médical. Confirmer l’ajout de cette durée ?');
   }
 
   function renderNext() {
@@ -149,7 +156,10 @@
     const toggle = el('button', { type: 'button', class: joined ? 'btn btn-secondary' : 'btn btn-primary', text: joined ? 'Je ne jeûne pas cette fois' : 'Je participe à ce jeûne' });
     toggle.addEventListener('click', () => {
       if (joined) removeFast(fast.start);
-      else addFast(fast.start, fast.days);
+      else {
+        if (!confirmLongFast(fast.days)) return;
+        addFast(fast.start, fast.days);
+      }
       refresh();
     });
     const ics = el('button', { type: 'button', class: 'btn btn-outline', text: 'Ajouter à mon agenda' });
@@ -231,6 +241,7 @@
       err.style.display = 'block';
       return;
     }
+    if (!confirmLongFast(days)) return;
     err.style.display = 'none';
     addFast(start, days);
     $('fast-start').value = '';
