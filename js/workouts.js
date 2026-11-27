@@ -365,6 +365,12 @@ function getTodayWorkout(profile, title) {
   }
   planned = safetyResult.exercises;
   const equipped = applyEquipment(planned, getSettings().equipment);
+  let filled = 0;
+  if (typeof fillWithGentleExercises === 'function') {
+    const topUp = fillWithGentleExercises(equipped.exercises, profile);
+    equipped.exercises = topUp.exercises;
+    filled = topUp.added;
+  }
 
   let equipmentNote = null;
   if (equipped.replaced || equipped.dropped) {
@@ -377,8 +383,17 @@ function getTodayWorkout(profile, title) {
   if (safetyResult.replaced || safetyResult.blocked || safetyResult.unknown) {
     const safetyParts = [];
     if (safetyResult.replaced) safetyParts.push(`${safetyResult.replaced} exercice${safetyResult.replaced > 1 ? 's' : ''} remplacé${safetyResult.replaced > 1 ? 's' : ''} par une option connue`);
-    if (safetyResult.blocked || safetyResult.unknown) safetyParts.push(`${safetyResult.blocked + safetyResult.unknown} exercice${safetyResult.blocked + safetyResult.unknown > 1 ? 's' : ''} retiré${safetyResult.blocked + safetyResult.unknown > 1 ? 's' : ''} pour prudence`);
+    const removed = safetyResult.blocked + safetyResult.unknown - safetyResult.replaced;
+    if (removed > 0) safetyParts.push(`${removed} exercice${removed > 1 ? 's' : ''} retiré${removed > 1 ? 's' : ''} pour prudence`);
     safetyNote = `Précautions prises en compte : ${safetyParts.join(', ')}.`;
+  }
+  if (filled) {
+    safetyNote = `${safetyNote ? safetyNote + ' ' : 'Précautions prises en compte : '}${filled} mouvement${filled > 1 ? 's' : ''} doux ajouté${filled > 1 ? 's' : ''} pour garder une séance complète.`;
+  }
+
+  // Très peu d'exercices compatibles : on le dit, et on renvoie vers un professionnel pour adapter la séance.
+  if (typeof fillWithGentleExercises === 'function' && equipped.exercises.length < SAFETY_MIN_EXERCISES) {
+    safetyNote = `${safetyNote ? safetyNote + ' ' : ''}Peu d'exercices sont compatibles avec tes précautions : demande l'avis d'un professionnel qualifié pour adapter ta séance.`;
   }
 
   return {
