@@ -326,7 +326,7 @@ function applyEquipment(exercises, equipment) {
 function getFastNote(phase) {
   if (!phase) return null;
   if (phase.phase === 'fast') return `Jeûne, jour ${phase.day} sur ${phase.days} : pas d'effort intense. Arrête-toi, assieds-toi et bois si tu as un vertige, des palpitations ou des nausées.`;
-  if (phase.phase === 'refeed') return `Reprise après le jeûne, jour ${phase.day} : séance à ${Math.round(phase.factor * 100)} % du volume. Remonte en douceur.`;
+  if (phase.phase === 'refeed') return `Reprise après le jeûne, jour ${phase.day} sur ${phase.refeedDays} : séance à ${Math.round(phase.factor * 100)} % du volume. Remonte en douceur.`;
   return 'Veille du jeûne : dernière séance complète. Prévois un repas léger, de l\'eau, des tisanes et du bouillon.';
 }
 
