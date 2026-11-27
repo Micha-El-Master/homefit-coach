@@ -196,6 +196,45 @@ function fillWithGentleExercises(exercises, profile, min = SAFETY_MIN_EXERCISES)
   return { exercises: out, added };
 }
 
+// Dernier garde-fou : quelle que soit la façon dont une liste d'exercices a été construite (séance, récupération,
+// échauffement, adaptation du coach, reprise d'une séance en pause), seuls des exercices compatibles avec les
+// précautions déclarées en sortent. Il réutilise les règles existantes (evaluateExerciseCompatibility) et
+// uniquement les alternatives déjà documentées ; il n'invente aucun exercice et n'en ajoute aucun pour atteindre un quota.
+//   status : 'complete' (au moins `min` exercices), 'short' (1 ou 2) ou 'impossible' (aucun : la séance ne doit pas démarrer).
+//   Le minimum de 3 exercices est un objectif de confort, jamais une obligation de sécurité.
+function enforceSafeExercises(exercises, profile, min = SAFETY_MIN_EXERCISES) {
+  const input = Array.isArray(exercises) ? exercises.filter((exercise) => exercise && typeof exercise.id === 'string') : [];
+  const pass = applySafetyToExercises(input, profile);
+  // Verrou final : on relit chaque exercice retenu, sans faire confiance à l'étape précédente.
+  const safe = pass.exercises.filter((exercise) => evaluateExerciseCompatibility(exercise.id, profile).compatible);
+  const keptIds = new Set(safe.map((exercise) => exercise.id));
+  const inputIds = new Set(input.map((exercise) => exercise.id));
+  return {
+    exercises: safe,
+    removed: input.filter((exercise) => !keptIds.has(exercise.id)).map((exercise) => exercise.id),
+    added: safe.filter((exercise) => !inputIds.has(exercise.id)).map((exercise) => exercise.id),
+    status: safe.length === 0 ? 'impossible' : safe.length < min ? 'short' : 'complete',
+  };
+}
+
+// Phrase d'explication d'un résultat de enforceSafeExercises (null si rien n'a changé).
+function describeSafetyEnforcement(result) {
+  if (!result) return null;
+  const replaced = result.added.length;
+  const dropped = Math.max(0, result.removed.length - replaced);
+  if (!replaced && !dropped && result.status !== 'impossible') return null;
+  const parts = [];
+  if (replaced) parts.push(`${replaced} exercice${replaced > 1 ? 's' : ''} remplacé${replaced > 1 ? 's' : ''} par une option connue`);
+  if (dropped) parts.push(`${dropped} exercice${dropped > 1 ? 's' : ''} retiré${dropped > 1 ? 's' : ''} pour prudence`);
+  let text = parts.length ? `Précautions prises en compte : ${parts.join(', ')}.` : '';
+  if (result.status === 'impossible') {
+    text += ' Aucun exercice n’est compatible avec tes précautions : la séance n’est pas proposée. Demande l’avis d’un professionnel qualifié.';
+  } else if (result.status === 'short') {
+    text += ' Peu d’exercices sont compatibles avec tes précautions : demande l’avis d’un professionnel qualifié pour adapter ta séance.';
+  }
+  return text.trim();
+}
+
 // Signaux proposés pendant une séance (le bouton « Douleur ou malaise »). `urgent` : aide médicale à solliciter.
 const SAFETY_SIGNALS = [
   { id: 'douleur', label: 'Douleur', urgent: false },

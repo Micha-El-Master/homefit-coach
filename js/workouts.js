@@ -289,7 +289,9 @@ function isFeasible(id, equipment) {
 
 // Remplace chaque exercice infaisable par une alternative faisable (sinon par un repli de la catégorie),
 // et le retire s'il n'existe rien de nouveau à proposer dans la séance.
-function applyEquipment(exercises, equipment) {
+// `profile` (facultatif) : un remplaçant incompatible avec les précautions déclarées n'est jamais choisi.
+function applyEquipment(exercises, equipment, profile = null) {
+  const isSafe = (id) => !profile || typeof evaluateExerciseCompatibility !== 'function' || evaluateExerciseCompatibility(id, profile).compatible;
   const out = [];
   let replaced = 0;
   let dropped = 0;
@@ -301,7 +303,7 @@ function applyEquipment(exercises, equipment) {
     const data = EXERCISES[ex.id];
     const candidates = [...(data.alternatives || []), ...(FALLBACKS_BY_CATEGORY[data.category] || [])];
     const sub = candidates.find(
-      (c) => isFeasible(c, equipment) && !exercises.some((e) => e.id === c) && !out.some((o) => o.id === c)
+      (c) => isFeasible(c, equipment) && isSafe(c) && !exercises.some((e) => e.id === c) && !out.some((o) => o.id === c)
     );
     if (!sub) {
       dropped++;
@@ -330,7 +332,10 @@ function getFastNote(phase) {
   return 'Veille du jeûne : dernière séance complète. Prévois un repas léger, de l\'eau, des tisanes et du bouillon.';
 }
 
-function getRecoveryWorkout() {
+// La récupération passe, comme toute séance, par le garde-fou central : aucun mouvement incompatible avec les précautions déclarées.
+function getRecoveryWorkout(profile = getProfile()) {
+  const safe = enforceSafeExercises(RECOVERY_ROUTINE.map((ex) => ({ ...ex })), profile);
+  const safetyNote = describeSafetyEnforcement(safe);
   return {
     type: 'training',
     recovery: true,
@@ -342,13 +347,15 @@ function getRecoveryWorkout() {
     feeling: null,
     goalNote: null,
     equipmentNote: null,
+    ...(safetyNote ? { safetyNote } : {}),
+    safetyStatus: safe.status,
     fastNote: getFastNote(fastPhaseOn(todayISO())),
-    exercises: RECOVERY_ROUTINE.map((ex) => ({ ...ex })),
+    exercises: safe.exercises,
   };
 }
 
 function getTodayWorkout(profile, title) {
-  if (title === RECOVERY_TITLE) return getRecoveryWorkout();
+  if (title === RECOVERY_TITLE) return getRecoveryWorkout(profile);
   const day = SESSION_CYCLE.find((s) => s.title === (title || getNextSessionTitle())) || SESSION_CYCLE[0];
   const level = profile ? (profile.levelScore || profile.level) : 'intermediaire';
   const goal = profile ? profile.goal : 'forme';
@@ -364,13 +371,19 @@ function getTodayWorkout(profile, title) {
     safetyResult = applySafetyToExercises(planned, profile);
   }
   planned = safetyResult.exercises;
-  const equipped = applyEquipment(planned, getSettings().equipment);
+  const equipped = applyEquipment(planned, getSettings().equipment, profile);
+  // Garde-fou central après le matériel : un remplaçant d'équipement ne doit jamais réintroduire un exercice écarté.
+  const afterEquipment = enforceSafeExercises(equipped.exercises, profile);
+  equipped.exercises = afterEquipment.exercises;
   let filled = 0;
   if (typeof fillWithGentleExercises === 'function') {
     const topUp = fillWithGentleExercises(equipped.exercises, profile);
     equipped.exercises = topUp.exercises;
     filled = topUp.added;
   }
+  // Verrou final, après le complément de mouvements doux : la séance retournée respecte toujours les précautions.
+  const finalGuard = enforceSafeExercises(equipped.exercises, profile);
+  equipped.exercises = finalGuard.exercises;
 
   let equipmentNote = null;
   if (equipped.replaced || equipped.dropped) {
@@ -395,6 +408,9 @@ function getTodayWorkout(profile, title) {
   if (typeof fillWithGentleExercises === 'function' && equipped.exercises.length < SAFETY_MIN_EXERCISES) {
     safetyNote = `${safetyNote ? safetyNote + ' ' : ''}Peu d'exercices sont compatibles avec tes précautions : demande l'avis d'un professionnel qualifié pour adapter ta séance.`;
   }
+  // Ce que les garde-fous ont dû corriger après coup (normalement rien : le matériel tient déjà compte du profil).
+  const lateNote = describeSafetyEnforcement({ ...afterEquipment, status: 'complete' }) || describeSafetyEnforcement({ ...finalGuard, status: 'complete' });
+  if (lateNote) safetyNote = `${safetyNote ? safetyNote + ' ' : ''}${lateNote}`;
 
   return {
     ...day,
@@ -405,9 +421,54 @@ function getTodayWorkout(profile, title) {
     goalNote: GOAL_NOTES[goal] || null,
     equipmentNote,
     safetyNote,
+    safetyStatus: finalGuard.status,
     fastNote: getFastNote(fastPhase),
     exercises: equipped.exercises.map((ex) => scaleExercise(ex, level, week, feeling, mode, volume)),
   };
+}
+
+// Adaptations proposées par le coach (coach.html), appliquées à une séance déjà filtrée par la sécurité.
+// Les transformations sont celles qui étaient écrites dans workout.html ; la seule différence est que le garde-fou
+// central repasse à la fin : aucune adaptation ne peut réintroduire un exercice incompatible avec les précautions.
+// Retourne { exercises, restSeconds, guard } (guard : résultat de enforceSafeExercises).
+function applyCoachAdaptation(exercises, adaptation, profile, restSeconds) {
+  let list = exercises;
+  let rest = restSeconds;
+  const type = adaptation && adaptation.type;
+  if (type === 'reduce-sets' || type === 'light') {
+    list = list.map((ex) => ({ ...ex, sets: Math.max(1, ex.sets - 1) }));
+  }
+  if (type === 'shorter-rest' || type === 'light') {
+    rest = Math.min(rest, 30);
+  }
+  if (type === 'no-equipment') {
+    list = applyEquipment(list, [], profile).exercises;
+  }
+  if (type === 'mini') {
+    list = list.slice(0, 3).map((ex) => ({ ...ex, sets: Math.min(2, ex.sets) }));
+  }
+  if (type === 'comeback') {
+    list = list.map((ex) => ({
+      ...ex,
+      sets: Math.max(1, ex.sets - 1),
+      ...(ex.reps ? { reps: Math.max(1, Math.round(ex.reps * 0.8)) } : {}),
+      ...(ex.holdSeconds ? { holdSeconds: Math.max(10, Math.round(ex.holdSeconds * 0.8)) } : {}),
+    }));
+  }
+  if (type === 'swap-categories') {
+    const categories = Array.isArray(adaptation.categories) ? adaptation.categories : [];
+    list = list.map((ex) => {
+      const data = EXERCISES[ex.id];
+      if (data && categories.includes(data.category) && data.alternatives && data.alternatives.length) {
+        // Première alternative compatible avec les précautions (la première tout court sans restriction).
+        const alt = data.alternatives.find((id) => evaluateExerciseCompatibility(id, profile).compatible);
+        if (alt) return { ...ex, id: alt };
+      }
+      return ex;
+    });
+  }
+  const guard = enforceSafeExercises(list, profile);
+  return { exercises: guard.exercises, restSeconds: rest, guard };
 }
 
 function getMotivationalMessage(dayNumber) {

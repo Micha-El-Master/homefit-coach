@@ -49,16 +49,16 @@
       <div class="settings-row" style="padding-top:0;">
         <div>
           <div class="row-label" id="opt-warmup-label">Échauffement</div>
-          <div class="row-desc">4 mouvements · ~2 min</div>
+          <div class="row-desc" id="opt-warmup-desc">4 mouvements · ~2 min</div>
         </div>
-        <label class="switch"><input type="checkbox" id="opt-warmup" aria-labelledby="opt-warmup-label" /><span class="slider"></span></label>
+        <label class="switch"><input type="checkbox" id="opt-warmup" aria-labelledby="opt-warmup-label" aria-describedby="opt-warmup-desc" /><span class="slider"></span></label>
       </div>
       <div class="settings-row" style="padding-bottom:0;">
         <div>
           <div class="row-label" id="opt-cooldown-label">Étirements</div>
-          <div class="row-desc">5 étirements · ~2 min 30</div>
+          <div class="row-desc" id="opt-cooldown-desc">5 étirements · ~2 min 30</div>
         </div>
-        <label class="switch"><input type="checkbox" id="opt-cooldown" aria-labelledby="opt-cooldown-label" /><span class="slider"></span></label>
+        <label class="switch"><input type="checkbox" id="opt-cooldown" aria-labelledby="opt-cooldown-label" aria-describedby="opt-cooldown-desc" /><span class="slider"></span></label>
       </div>
       <p id="rest-note" style="font-size:12px; color:var(--text-muted); margin:12px 0 0;"></p>
     </div>
@@ -203,37 +203,26 @@
   let REST_SECONDS = today.recovery ? 10 : settings.restSeconds;
   const options = today.recovery ? { warmup: false, cooldown: false } : { warmup: settings.warmup, cooldown: settings.cooldown };
 
+  // Adaptation du coach : le garde-fou central repasse après la transformation (voir applyCoachAdaptation).
   if (adaptation && !today.recovery) {
-    if (adaptation.type === 'reduce-sets' || adaptation.type === 'light') {
-      today.exercises = today.exercises.map((ex) => ({ ...ex, sets: Math.max(1, ex.sets - 1) }));
-    }
-    if (adaptation.type === 'shorter-rest' || adaptation.type === 'light') {
-      REST_SECONDS = Math.min(REST_SECONDS, 30);
-    }
-    if (adaptation.type === 'no-equipment') {
-      today.exercises = applyEquipment(today.exercises, []).exercises;
-    }
-    if (adaptation.type === 'mini') {
-      today.exercises = today.exercises.slice(0, 3).map((ex) => ({ ...ex, sets: Math.min(2, ex.sets) }));
-    }
-    if (adaptation.type === 'comeback') {
-      today.exercises = today.exercises.map((ex) => ({
-        ...ex,
-        sets: Math.max(1, ex.sets - 1),
-        ...(ex.reps ? { reps: Math.max(1, Math.round(ex.reps * 0.8)) } : {}),
-        ...(ex.holdSeconds ? { holdSeconds: Math.max(10, Math.round(ex.holdSeconds * 0.8)) } : {}),
-      }));
-    }
-    if (adaptation.type === 'swap-categories') {
-      today.exercises = today.exercises.map((ex) => {
-        const data = EXERCISES[ex.id];
-        if (adaptation.categories.includes(data.category) && data.alternatives && data.alternatives.length) {
-          return { ...ex, id: data.alternatives[0] };
-        }
-        return ex;
-      });
-    }
+    const adapted = applyCoachAdaptation(today.exercises, adaptation, profile, REST_SECONDS);
+    today.exercises = adapted.exercises;
+    REST_SECONDS = adapted.restSeconds;
+    today.safetyStatus = adapted.guard.status;
+    const adaptationNote = describeSafetyEnforcement(adapted.guard);
+    if (adaptationNote) today.safetyNote = [today.safetyNote, adaptationNote].filter(Boolean).join(' ');
   }
+
+  // Échauffement et étirements : mêmes règles de sécurité que les exercices de la séance.
+  // Une phase sans aucun mouvement compatible est ignorée (jamais d'exercice incompatible forcé).
+  function computeRoutines(forProfile) {
+    const warmup = enforceSafeExercises(WARMUP_ROUTINE, forProfile);
+    const cooldown = enforceSafeExercises(COOLDOWN_ROUTINE, forProfile);
+    return { warmup: warmup.exercises, cooldown: cooldown.exercises, warmupResult: warmup, cooldownResult: cooldown };
+  }
+  let routines = computeRoutines(profile);
+  const routineIds = (list) => list.map((ex) => ex.id);
+  const sameIds = (a, b) => a.length === b.length && a.every((id, i) => id === b[i]);
 
   const views = {
     list: document.getElementById('view-list'),
@@ -276,6 +265,7 @@
     if (today.goalNote) notes.push(`🎯 ${today.goalNote}`);
     if (today.equipmentNote) notes.push(`🧰 ${today.equipmentNote}`);
     if (today.safetyNote) notes.push(`🛡️ ${today.safetyNote}`);
+    else if (!today.exercises.length) notes.push('🛡️ Aucun exercice n’est compatible avec tes précautions : la séance n’est pas proposée. Demande l’avis d’un professionnel qualifié.');
     if (typeof getSafetyWarnings === 'function') {
       getSafetyWarnings(profile).forEach((warning) => notes.push(`🛡️ ${warning}`));
     }
@@ -293,6 +283,8 @@
     const cooldownBox = document.getElementById('opt-cooldown');
     warmupBox.checked = options.warmup;
     cooldownBox.checked = options.cooldown;
+    describeRoutine(warmupBox, document.getElementById('opt-warmup-desc'), routines.warmupResult, 'mouvement');
+    describeRoutine(cooldownBox, document.getElementById('opt-cooldown-desc'), routines.cooldownResult, 'étirement');
     warmupBox.addEventListener('change', () => {
       options.warmup = warmupBox.checked;
       saveSettings({ ...getSettings(), warmup: options.warmup });
@@ -315,7 +307,15 @@
     if (saved && Date.now() - saved.savedAt < 12 * 3600 * 1000) {
       document.getElementById('resume-card').style.display = 'block';
       document.getElementById('resume-text').textContent = `${saved.title} — étape ${saved.queueIndex + 1}, démarrée le ${saved.date}.`;
-      document.getElementById('resume-btn').addEventListener('click', () => resumeSession(saved));
+      if (checkSavedSession(saved).ok) {
+        document.getElementById('resume-btn').addEventListener('click', () => resumeSession(saved));
+      } else {
+        // Séance en pause incompatible avec les précautions actuelles : pas de reprise telle quelle.
+        // Rien n'est supprimé ici (séances terminées, série et badges restent intacts) : on propose une séance adaptée.
+        document.getElementById('resume-text').textContent = `${saved.title} — cette séance en pause ne correspond plus à tes précautions actuelles : elle ne peut pas être reprise telle quelle. Recommence avec la séance adaptée ci-dessous ; tes séances déjà terminées ne sont pas modifiées.`;
+        document.getElementById('resume-btn').style.display = 'none';
+        document.getElementById('restart-btn').textContent = 'Recommencer une séance adaptée';
+      }
       document.getElementById('restart-btn').addEventListener('click', () => {
         clearInProgress();
         document.getElementById('resume-card').style.display = 'none';
@@ -325,7 +325,13 @@
     }
 
     renderExerciseList();
-    document.getElementById('start-btn').addEventListener('click', startSession);
+    const startBtn = document.getElementById('start-btn');
+    startBtn.addEventListener('click', startSession);
+    if (!today.exercises.length) {
+      // Aucun exercice compatible : on l'explique et la séance ne peut pas démarrer.
+      startBtn.disabled = true;
+      startBtn.textContent = 'Séance indisponible avec tes précautions';
+    }
 
     document.getElementById('exercise-list').addEventListener('click', (e) => {
       const swapBtn = e.target.closest('.swap-btn');
@@ -339,6 +345,11 @@
       if (altChip) {
         e.stopPropagation();
         const idx = Number(altChip.dataset.idx);
+        // Même si le bouton a été affiché, on revérifie avec les précautions actuelles avant de remplacer.
+        if (!evaluateExerciseCompatibility(altChip.dataset.altId, getProfile()).compatible) {
+          renderExerciseList();
+          return;
+        }
         today.exercises[idx] = { ...today.exercises[idx], id: altChip.dataset.altId };
         renderExerciseList();
         return;
@@ -350,15 +361,38 @@
     });
   }
 
+  // Texte de durée « ~2 min 30 » pour la description d'une routine.
+  function formatRoutineDuration(exercises) {
+    const total = exercises.reduce((sum, ex) => sum + (ex.holdSeconds || 0), 0);
+    const m = Math.floor(total / 60);
+    const s = total % 60;
+    return m ? `~${m} min${s ? ` ${s}` : ''}` : `~${s} s`;
+  }
+
+  // Si les précautions modifient une routine, on l'explique ; sans restriction concernée, l'affichage historique reste inchangé.
+  function describeRoutine(box, desc, result, noun) {
+    if (!result.removed.length && !result.added.length) return;
+    if (!result.exercises.length) {
+      box.disabled = true;
+      desc.textContent = `Aucun ${noun} compatible avec tes précautions : cette phase est ignorée.`;
+      return;
+    }
+    const n = result.exercises.length;
+    desc.textContent = `${n} ${noun}${n > 1 ? 's' : ''} adapté${n > 1 ? 's' : ''} à tes précautions · ${formatRoutineDuration(result.exercises)}`;
+  }
+
   function renderExerciseList() {
     const list = document.getElementById('exercise-list');
+    const currentProfile = getProfile();
     list.innerHTML = today.exercises
       .map((ex, idx) => {
         const data = EXERCISES[ex.id];
         const target = ex.reps
           ? `${ex.sets} séries × ${ex.reps}${ex.perLeg ? '/jambe' : ''}`
           : `${ex.sets} séries × ${ex.holdSeconds}s`;
-        const alts = (data.alternatives || [])
+        // Remplacement manuel : seules les alternatives compatibles avec les précautions sont proposées.
+        const safeAlternatives = (data.alternatives || []).filter((altId) => evaluateExerciseCompatibility(altId, currentProfile).compatible);
+        const alts = safeAlternatives
           .map(
             (altId) =>
               `<button class="alt-item alt-chip" data-idx="${idx}" data-alt-id="${altId}">
@@ -367,6 +401,9 @@
               </button>`
           )
           .join('');
+        const noSafeAlternative = (data.alternatives || []).length > 0 && safeAlternatives.length === 0
+          ? '<p style="font-size:13px; color:var(--text-muted); margin:0;">Aucune alternative compatible avec tes précautions.</p>'
+          : '';
         return `
           <li class="exercise-item" data-idx="${idx}" style="flex-wrap:wrap;">
             <div class="emoji">${data.icon}</div>
@@ -375,7 +412,7 @@
               <div class="meta">${target}</div>
             </div>
             <button class="icon-btn swap-btn" data-idx="${idx}" style="width:32px;height:32px;font-size:14px;" title="Remplacer">🔄</button>
-            <div class="alt-list" id="alt-panel-${idx}" style="display:none; width:100%; margin-top:10px;">${alts}</div>
+            <div class="alt-list" id="alt-panel-${idx}" style="display:none; width:100%; margin-top:10px;">${alts}${noSafeAlternative}</div>
           </li>
         `;
       })
@@ -393,8 +430,8 @@
 
   function buildQueue() {
     const steps = [];
-    if (options.warmup) {
-      WARMUP_ROUTINE.forEach((ex, i, arr) =>
+    if (options.warmup && routines.warmup.length) {
+      routines.warmup.forEach((ex, i, arr) =>
         steps.push({ exercise: ex, setIndex: 1, phase: 'warmup', phaseLabel: `Échauffement ${i + 1}/${arr.length}` })
       );
     }
@@ -407,8 +444,8 @@
         }
       }
     });
-    if (options.cooldown) {
-      COOLDOWN_ROUTINE.forEach((ex, i, arr) =>
+    if (options.cooldown && routines.cooldown.length) {
+      routines.cooldown.forEach((ex, i, arr) =>
         steps.push({ exercise: ex, setIndex: 1, phase: 'cooldown', phaseLabel: `Étirements ${i + 1}/${arr.length}` })
       );
     }
@@ -416,6 +453,8 @@
   }
 
   function startSession() {
+    // Aucun exercice compatible avec les précautions : la séance n'est jamais lancée.
+    if (!today.exercises.length) return;
     sessionStart = Date.now();
     queue = buildQueue();
     queueIndex = 0;
@@ -428,7 +467,29 @@
     runStep();
   }
 
+  // Une séance en pause n'est reprise que si elle respecte les précautions ACTUELLES (elles ont pu changer depuis la pause)
+  // et si ses phases d'échauffement / d'étirements sont celles qui étaient en cours (sinon l'étape sauvegardée ne correspondrait plus).
+  function checkSavedSession(saved) {
+    if (!saved || !Array.isArray(saved.exercises) || !saved.exercises.length) return { ok: false };
+    const currentProfile = getProfile();
+    const guard = enforceSafeExercises(saved.exercises, currentProfile);
+    if (guard.removed.length || guard.added.length) return { ok: false };
+    const current = computeRoutines(currentProfile);
+    const savedOptions = saved.options || {};
+    // Séances sauvegardées avant ce garde-fou : leurs routines étaient les routines complètes.
+    const savedRoutines = saved.routines || { warmup: routineIds(WARMUP_ROUTINE), cooldown: routineIds(COOLDOWN_ROUTINE) };
+    if (savedOptions.warmup && !sameIds(savedRoutines.warmup || [], routineIds(current.warmup))) return { ok: false };
+    if (savedOptions.cooldown && !sameIds(savedRoutines.cooldown || [], routineIds(current.cooldown))) return { ok: false };
+    return { ok: true, routines: current };
+  }
+
   function resumeSession(saved) {
+    const check = checkSavedSession(saved);
+    if (!check.ok) {
+      showToast('Cette séance ne peut pas être reprise : elle ne correspond plus à tes précautions.');
+      return;
+    }
+    routines = check.routines;
     today.title = saved.title;
     today.subtitle = saved.subtitle;
     today.exercises = saved.exercises;
@@ -453,6 +514,7 @@
       exercises: today.exercises,
       restSeconds: REST_SECONDS,
       options,
+      routines: { warmup: routineIds(routines.warmup), cooldown: routineIds(routines.cooldown) },
       queueIndex,
       tally: exerciseTally,
       setLog,
