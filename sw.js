@@ -1,4 +1,4 @@
-const CACHE_NAME = 'homefit-coach-v17';
+const CACHE_NAME = 'homefit-coach-v19';
 const ASSETS = [
   'index.html',
   'dashboard.html',

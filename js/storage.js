@@ -123,8 +123,19 @@ function getWeeklyTarget() {
 }
 
 // Jeûne communautaire : liste de { start: 'AAAA-MM-JJ', days: 1 à 14 } choisie par l'utilisateur (réglages).
-// Pendant le jeûne : séances remplacées par de la récupération douce ; ensuite reprise progressive (60 %, 70 %).
-const FAST_REFEED_FACTORS = [0.6, 0.7];
+// Pendant le jeûne : séances remplacées par de la récupération douce ; ensuite reprise progressive.
+// La reprise dure environ la moitié du jeûne (au moins 2 jours) : 60 % du volume, puis +10 % par jour jusqu'à 90 %.
+const FAST_REFEED_START = 0.6;
+const FAST_REFEED_STEP = 0.1;
+const FAST_REFEED_CAP = 0.9;
+
+function fastRefeedDays(fastDays) {
+  return Math.max(2, Math.ceil(fastDays / 2));
+}
+
+function fastRefeedFactor(index) {
+  return Math.round(Math.min(FAST_REFEED_CAP, FAST_REFEED_START + FAST_REFEED_STEP * index) * 100) / 100;
+}
 const FAST_MAX_DAYS = 14;
 
 function sanitizeFasts(list) {
@@ -164,7 +175,7 @@ function fastPhaseOn(iso, fasts = getFasts()) {
     if (offset === -1) return { phase: 'prep', fast: f, day: 0, days: f.days, factor: 1 };
     if (offset >= 0 && offset < f.days) return { phase: 'fast', fast: f, day: offset + 1, days: f.days, factor: 0 };
     const after = offset - f.days;
-    if (after >= 0 && after < FAST_REFEED_FACTORS.length) return { phase: 'refeed', fast: f, day: after + 1, days: f.days, factor: FAST_REFEED_FACTORS[after] };
+    if (after >= 0 && after < fastRefeedDays(f.days)) return { phase: 'refeed', fast: f, day: after + 1, days: f.days, refeedDays: fastRefeedDays(f.days), factor: fastRefeedFactor(after) };
   }
   return null;
 }

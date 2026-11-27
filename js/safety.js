@@ -29,7 +29,7 @@ const SAFETY_EXERCISE_DATA = {
   'pont-fessier': { restrictions: ['back'], alternatives: ['crunch', 'respiration-profonde'] },
   mollets: { restrictions: ['balance'], alternatives: ['pont-fessier'] },
   crunch: { restrictions: ['back'], alternatives: ['respiration-profonde', 'planche'] },
-  superman: { restrictions: ['back'], alternatives: ['gainage-dorsal', 'etirement-posture'] },
+  superman: { restrictions: ['back'], alternatives: ['gainage-dorsal', 'posture-enfant'] },
   'gainage-dorsal': { restrictions: ['back'], alternatives: ['superman', 'respiration-profonde'] },
   'curl-biceps': { restrictions: [], alternatives: [] },
   'rowing-serviette': { restrictions: ['back', 'shoulders'], alternatives: ['gainage-dorsal'] },
@@ -39,8 +39,26 @@ const SAFETY_EXERCISE_DATA = {
   'mountain-climbers': { restrictions: ['knees', 'back', 'shoulders', 'balance'], alternatives: ['respiration-profonde', 'planche'] },
   'squat-jump': { restrictions: ['knees', 'back', 'balance', 'mobility'], alternatives: ['squat', 'pont-fessier'] },
   planche: { restrictions: ['back', 'shoulders', 'mobility'], alternatives: ['gainage-dorsal', 'respiration-profonde'] },
-  'jumping-jacks': { restrictions: ['knees', 'balance', 'mobility'], alternatives: ['rotation-hanches', 'respiration-profonde'] },
+  'jumping-jacks': { restrictions: ['knees', 'balance', 'mobility'], alternatives: ['rotations-hanches', 'respiration-profonde'] },
 };
+
+// Mouvements doux (mobilité, étirements, respiration) : sans restriction connue, sauf ceux qui demandent de l'équilibre ou de la mobilité.
+Object.assign(SAFETY_EXERCISE_DATA, {
+  'respiration-profonde': { restrictions: [], alternatives: [] },
+  'posture-enfant': { restrictions: ['knees'], alternatives: ['respiration-profonde'] },
+  'chat-vache': { restrictions: ['shoulders'], alternatives: ['respiration-profonde'] },
+  'rotations-hanches': { restrictions: ['balance'], alternatives: ['respiration-profonde'] },
+  'rotations-bras': { restrictions: ['shoulders'], alternatives: ['respiration-profonde'] },
+  'etirement-quadriceps': { restrictions: ['balance', 'knees'], alternatives: ['etirement-ischios'] },
+  'etirement-ischios': { restrictions: ['back'], alternatives: ['respiration-profonde'] },
+  'etirement-pectoraux': { restrictions: ['shoulders'], alternatives: ['respiration-profonde'] },
+  'etirement-epaules': { restrictions: ['shoulders'], alternatives: ['respiration-profonde'] },
+  'genoux-hauts': { restrictions: ['knees', 'balance', 'mobility'], alternatives: ['respiration-profonde'] },
+});
+
+// Une séance ne descend jamais sous ce nombre d'exercices : on la complète avec des mouvements doux compatibles.
+const SAFETY_MIN_EXERCISES = 3;
+const SAFETY_GENTLE_FILLERS = ['respiration-profonde', 'rotations-hanches', 'rotations-bras', 'chat-vache', 'etirement-ischios', 'etirement-pectoraux', 'etirement-epaules', 'posture-enfant', 'etirement-quadriceps'];
 
 function isPlainSafetyObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -130,6 +148,7 @@ function evaluateExerciseCompatibility(exerciseId, profile) {
 
 function applySafetyToExercises(exercises, profile) {
   const used = new Set();
+  const planned = new Set(exercises.map((exercise) => exercise.id));
   let blocked = 0;
   let replaced = 0;
   let unknown = 0;
@@ -143,7 +162,7 @@ function applySafetyToExercises(exercises, profile) {
     }
     if (decision.status === 'unknown') unknown++;
     else blocked++;
-    if (decision.alternative && !used.has(decision.alternative)) {
+    if (decision.alternative && !used.has(decision.alternative) && !planned.has(decision.alternative)) {
       const alt = { ...exercise, id: decision.alternative };
       const altData = typeof EXERCISES !== 'undefined' ? EXERCISES[decision.alternative] : null;
       if (altData && altData.type === 'hold' && alt.reps) {
@@ -161,6 +180,32 @@ function applySafetyToExercises(exercises, profile) {
   });
   return { exercises: out, blocked, replaced, unknown };
 }
+
+// Complète une séance trop courte avec des mouvements doux compatibles avec les précautions déclarées.
+function fillWithGentleExercises(exercises, profile, min = SAFETY_MIN_EXERCISES) {
+  const out = exercises.slice();
+  const present = new Set(out.map((exercise) => exercise.id));
+  let added = 0;
+  for (const id of SAFETY_GENTLE_FILLERS) {
+    if (out.length >= min) break;
+    if (present.has(id) || !evaluateExerciseCompatibility(id, profile).compatible) continue;
+    out.push({ id, sets: 2, holdSeconds: 40 });
+    present.add(id);
+    added++;
+  }
+  return { exercises: out, added };
+}
+
+// Signaux proposés pendant une séance (le bouton « Douleur ou malaise »). `urgent` : aide médicale à solliciter.
+const SAFETY_SIGNALS = [
+  { id: 'douleur', label: 'Douleur', urgent: false },
+  { id: 'vertige', label: 'Vertige ou étourdissement', urgent: false },
+  { id: 'malaise', label: 'Malaise ou nausée', urgent: false },
+  { id: 'essoufflement', label: 'Essoufflement important', urgent: false },
+  { id: 'douleur-thoracique', label: 'Douleur dans la poitrine', urgent: true },
+  { id: 'difficulte-respiratoire-severe', label: 'Grande difficulté à respirer', urgent: true },
+  { id: 'malaise-severe', label: 'Malaise sévère', urgent: true },
+];
 
 function computeSafetyStop(signal) {
   const urgent = ['douleur-thoracique', 'difficulte-respiratoire-severe', 'malaise-severe'];

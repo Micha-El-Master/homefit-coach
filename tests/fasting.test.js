@@ -93,3 +93,26 @@ test('agenda du jeûne : événement sur toute la durée, fin exclusive', () => 
   assert.match(ics, /DTSTART;VALUE=DATE:20261202/);
   assert.match(ics, /DTEND;VALUE=DATE:20261205/);
 });
+
+test('reprise proportionnelle : environ la moitié du jeûne (2 jours minimum), +10 % par jour jusqu\'à 90 %', () => {
+  const days = (n) => app.run(`fastRefeedDays(${n})`);
+  const app = createApp();
+  assert.deepStrictEqual([1, 2, 3, 4, 5, 7, 14].map(days), [2, 2, 2, 2, 3, 4, 7]);
+  assert.deepStrictEqual([0, 1, 2, 3, 4, 6].map((i) => app.run(`fastRefeedFactor(${i})`)), [0.6, 0.7, 0.8, 0.9, 0.9, 0.9]);
+});
+
+test('jeûne de 14 jours : 7 jours de reprise progressive, puis retour à la normale', () => {
+  const app = withFast();
+  app.settings({ fasts: [{ start: '2026-10-14', days: 14 }] });
+  assert.deepStrictEqual(phase(app, '2026-10-28'), { phase: 'refeed', day: 1, factor: 0.6 });
+  assert.deepStrictEqual(phase(app, '2026-10-31'), { phase: 'refeed', day: 4, factor: 0.9 });
+  assert.deepStrictEqual(phase(app, '2026-11-03'), { phase: 'refeed', day: 7, factor: 0.9 });
+  assert.strictEqual(phase(app, '2026-11-04'), null);
+});
+
+test('le message de reprise indique le jour et la durée', () => {
+  const app = createApp({ now: new Date(2026, 9, 28, 12, 0, 0) });
+  app.profile({ startDate: '2026-09-01' });
+  app.settings({ trainingDays: [1, 3, 5], fasts: [{ start: '2026-10-14', days: 14 }] });
+  assert.match(app.run('getTodayWorkout(getProfile()).fastNote'), /jour 1 sur 7 : séance à 60 %/);
+});
