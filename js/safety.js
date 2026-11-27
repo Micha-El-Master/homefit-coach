@@ -196,6 +196,17 @@ function fillWithGentleExercises(exercises, profile, min = SAFETY_MIN_EXERCISES)
   return { exercises: out, added };
 }
 
+// Signaux proposés pendant une séance (le bouton « Douleur ou malaise »). `urgent` : aide médicale à solliciter.
+const SAFETY_SIGNALS = [
+  { id: 'douleur', label: 'Douleur', urgent: false },
+  { id: 'vertige', label: 'Vertige ou étourdissement', urgent: false },
+  { id: 'malaise', label: 'Malaise ou nausée', urgent: false },
+  { id: 'essoufflement', label: 'Essoufflement important', urgent: false },
+  { id: 'douleur-thoracique', label: 'Douleur dans la poitrine', urgent: true },
+  { id: 'difficulte-respiratoire-severe', label: 'Grande difficulté à respirer', urgent: true },
+  { id: 'malaise-severe', label: 'Malaise sévère', urgent: true },
+];
+
 function computeSafetyStop(signal) {
   const urgent = ['douleur-thoracique', 'difficulte-respiratoire-severe', 'malaise-severe'];
   const stopSignals = ['douleur', 'malaise', 'vertige', 'essoufflement', ...urgent];

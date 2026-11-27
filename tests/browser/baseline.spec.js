@@ -152,3 +152,51 @@ test('précautions peuvent être enregistrées depuis les réglages', async ({ p
   expect(safety.responded).toBe(true);
   expect(safety.limitations).toContain('knees');
 });
+
+async function startSessionAndOpenSafety(page) {
+  await installTestProfile(page);
+  await page.goto('/workout.html');
+  await page.locator('#start-btn').click();
+  await expect(page.locator('#view-work')).toBeVisible();
+  await page.locator('#safety-btn-work').click();
+  await expect(page.locator('#safety-overlay')).toBeVisible();
+}
+
+test('bouton douleur ou malaise : « tout va bien » reprend la séance', async ({ page }) => {
+  await startSessionAndOpenSafety(page);
+  await page.locator('#safety-cancel').click();
+  await expect(page.locator('#safety-overlay')).toBeHidden();
+  await expect(page.locator('#view-work')).toBeVisible();
+});
+
+test('bouton douleur ou malaise : un symptôme arrête la séance et la supprime de la reprise', async ({ page }) => {
+  await startSessionAndOpenSafety(page);
+  await page.locator('.safety-signal', { hasText: 'Vertige' }).click();
+  await expect(page.locator('#safety-message')).toContainText('Arrête l’effort');
+  await expect(page.locator('#safety-emergency')).toBeHidden();
+  await expect(page.locator('#safety-later')).toBeVisible();
+  await page.locator('#safety-stop').click();
+  await page.waitForURL('**/dashboard.html');
+  expect(await page.evaluate(() => localStorage.getItem('hfc_inprogress'))).toBeNull();
+});
+
+test('bouton douleur ou malaise : un signe d’alerte demande de l’aide et ne laisse pas reprendre', async ({ page }) => {
+  await startSessionAndOpenSafety(page);
+  await page.locator('.safety-signal', { hasText: 'poitrine' }).click();
+  await expect(page.locator('#safety-message')).toContainText('aide médicale');
+  await expect(page.locator('#safety-emergency')).toBeVisible();
+  await expect(page.locator('#safety-later')).toBeHidden();
+  await expect(page.locator('#safety-cancel')).toBeHidden();
+});
+
+test('bouton douleur ou malaise : disponible aussi pendant le repos', async ({ page }) => {
+  await installTestProfile(page);
+  await page.goto('/workout.html');
+  await page.locator('#start-btn').click();
+  await page.locator('#work-done-btn').click();
+  await expect(page.locator('#view-rest')).toBeVisible();
+  await page.locator('#safety-btn-rest').click();
+  await expect(page.locator('#safety-overlay')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#safety-overlay')).toBeHidden();
+});

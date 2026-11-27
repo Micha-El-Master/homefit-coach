@@ -162,3 +162,16 @@ test('note de sécurité : un exercice remplacé n\'est pas aussi compté comme 
   assert.match(w.safetyNote, /1 exercice remplacé/);
   assert.match(w.safetyNote, /4 exercices retirés/);
 });
+
+test('signaux du bouton « Douleur ou malaise » : chacun arrête la séance, l\'urgence est cohérente', () => {
+  const app = createApp();
+  const signals = app.run('SAFETY_SIGNALS');
+  assert.ok(signals.length >= 4);
+  assert.strictEqual(new Set(signals.map((s) => s.id)).size, signals.length);
+  signals.forEach((s) => {
+    const decision = app.run(`computeSafetyStop(${JSON.stringify(s.id)})`);
+    assert.strictEqual(decision.stop, true, `${s.id} doit arrêter la séance`);
+    assert.strictEqual(decision.urgent, s.urgent, `${s.id} : urgence incohérente`);
+  });
+  assert.ok(signals.some((s) => s.urgent) && signals.some((s) => !s.urgent));
+});
