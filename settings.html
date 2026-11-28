@@ -206,6 +206,8 @@
 
 <script src="js/storage.js"></script>
 <script src="js/safety.js"></script>
+<script src="js/safety-intensity.js"></script>
+<script src="js/safety-policy.js"></script>
 <script src="js/exercises.js"></script>
 <script src="js/timer.js"></script>
 <script src="js/app.js"></script>
@@ -399,7 +401,15 @@
   });
   renderEquipment();
 
-  document.getElementById('ics-btn').addEventListener('click', downloadICS);
+  // Entraînement non autorisé par la politique de sécurité : ni agenda de séances, ni rappel de séance.
+  const trainingAllowed = evaluateSafetyPolicy(getProfile(), { action: 'view' }).canStartTraining;
+  if (!trainingAllowed) {
+    document.getElementById('ics-btn').disabled = true;
+    document.getElementById('reminder-note').textContent = 'Ton entraînement est suspendu par précaution : l’agenda de séances n’est pas proposé et aucun rappel de séance n’est envoyé.';
+  }
+  document.getElementById('ics-btn').addEventListener('click', () => {
+    if (!downloadICS()) showStatus('L’agenda de séances n’est pas proposé : ton entraînement est suspendu par précaution.', false);
+  });
 
   async function renderDataStatus() {
     const days = daysSinceBackup();

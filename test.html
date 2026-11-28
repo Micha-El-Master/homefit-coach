@@ -205,7 +205,17 @@
     setValue(results[s.test.id] ?? 0);
   }
 
+  // Le test de niveau est un effort physique : la politique est réévaluée à chaque étape. Si elle l'interdit en cours de test
+  // (précautions modifiées dans un autre onglet), le test s'arrête, rien n'est enregistré, et la page revient à l'introduction.
+  function trainingStillAllowed() {
+    if (evaluateSafetyPolicy(getProfile(), { action: 'start-training' }).canStartTraining) return true;
+    stopTimer();
+    location.reload();
+    return false;
+  }
+
   $('lt-timer-btn').addEventListener('click', () => {
+    if (!trainingStillAllowed()) return;
     const s = STEPS[step];
     if (timerId) {
       stopTimer();
@@ -260,6 +270,7 @@
   });
 
   $('lt-next').addEventListener('click', () => {
+    if (!trainingStillAllowed()) return;
     results[STEPS[step].test.id] = value;
     if (selectedFeeling) results.effort = selectedFeeling === 'difficile' ? 'difficile' : selectedFeeling;
     results.completedTests = results.completedTests || [];
@@ -274,6 +285,7 @@
 
   $('lt-skip').addEventListener('click', (e) => {
     e.preventDefault();
+    if (!trainingStillAllowed()) return;
     results.skipped = (results.skipped || []);
     results.skipped.push(STEPS[step].test.id);
     if (step < STEPS.length - 1) {

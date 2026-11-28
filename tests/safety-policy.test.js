@@ -8,7 +8,7 @@ const NOW = new Date(2026, 9, 15, 12, 0, 0);
 const PHYSICAL = ['knees', 'back', 'shoulders', 'balance', 'mobility'];
 const ALL_IDS = [...PHYSICAL, 'professional_advice', 'chest_symptoms'];
 const TIERS = ['clear', 'caution', 'restricted', 'blocked'];
-const ACTIONS = ['view', 'start-training', 'start-recovery', 'resume', 'adjust-up', 'start-challenge', 'start-cycle', 'coach-adapt', 'swap'];
+const ACTIONS = ['view', 'start-training', 'start-recovery', 'resume', 'adjust-up', 'start-challenge', 'start-cycle', 'coach-adapt', 'swap', 'start-activity'];
 const ADAPTATIONS = ['reduce-sets', 'light', 'shorter-rest', 'no-equipment', 'mini', 'comeback', 'swap-categories'];
 const TITLES = ['Haut du corps', 'Jambes + Abdos', 'Dos + Biceps', 'Full Body + Cardio'];
 const pure = createApp({ now: NOW });
@@ -216,8 +216,8 @@ test('actions : sous « caution » et « restricted », aucune augmentation (hau
     assert.strictEqual(evalP(s, { action: 'adjust-up' }).allowed, false, J(s));
     assert.strictEqual(evalP(s, { action: 'start-cycle', mode: 'phase2' }).allowed, false, J(s));
     assert.strictEqual(evalP(s, { action: 'start-cycle', mode: 'maintenance' }).allowed, true, 'les réductions restent autorisées');
-    assert.strictEqual(evalP(s, { action: 'start-challenge', challenge: { exerciseIds: [], progressive: true } }).allowed, false, J(s));
-    assert.strictEqual(evalP(s, { action: 'start-challenge', challenge: { exerciseIds: [], progressive: false } }).allowed, true, 'défi sans charge croissante');
+    assert.strictEqual(evalP(s, { action: 'start-challenge', challenge: { exerciseIds: [], activity: 'hydration', progressive: true } }).allowed, false, J(s));
+    assert.strictEqual(evalP(s, { action: 'start-challenge', challenge: { exerciseIds: [], activity: 'hydration', progressive: false } }).allowed, true, 'défi sans charge croissante ni activité physique');
   });
 });
 
@@ -245,7 +245,9 @@ const SAMPLE_CONTEXTS = [
   { action: 'resume', exercises: [{ id: 'respiration-profonde' }, { id: 'pompes' }] },
   { action: 'resume', exercises: [{ id: 'respiration-profonde' }], recovery: true },
   { action: 'start-challenge', challenge: { exerciseIds: ['squat'], progressive: true } },
-  { action: 'start-challenge', challenge: { exerciseIds: [], progressive: false } },
+  { action: 'start-challenge', challenge: { exerciseIds: [], activity: 'hydration', progressive: false } },
+  { action: 'start-challenge', challenge: { exerciseIds: [], activity: 'kegel', progressive: false } },
+  { action: 'start-activity', activity: 'hydration' }, { action: 'start-activity', activity: 'kegel' },
   { action: 'start-cycle', mode: 'phase2' }, { action: 'start-cycle', mode: 'standard' },
   { action: 'coach-adapt', adaptation: { type: 'light' } }, { action: 'coach-adapt', adaptation: { type: 'swap-categories' } },
   { action: 'swap', exerciseId: 'respiration-profonde' }, { action: 'swap', exerciseId: 'pompes' }, { action: 'swap', exerciseId: 'burpees' }, { action: 'swap', exerciseId: 'squat' },
@@ -285,6 +287,8 @@ test('invariant 3 : un état bloqué ne peut être contourné par aucun parcours
     { action: 'adjust-up' }, { action: 'start-cycle', mode: 'phase2' },
     { action: 'start-challenge', challenge: { exerciseIds: ['squat'], progressive: true } },
     { action: 'start-challenge', challenge: { exerciseIds: ['planche'], progressive: false } },
+    { action: 'start-challenge', challenge: { exerciseIds: [], activity: 'kegel', progressive: false } },
+    { action: 'start-activity', activity: 'kegel' },
     ...ADAPTATIONS.map((type) => ({ action: 'coach-adapt', adaptation: { type } })),
     ...['respiration-profonde', 'pompes', 'burpees', 'squat', 'chat-vache'].map((exerciseId) => ({ action: 'swap', exerciseId })),
   ];
@@ -500,7 +504,7 @@ test('reprise : une séance enregistrée est réévaluée avec le profil actuel 
   assert.strictEqual(decide(withAck({ status: 'unanswered' })).allowed, true, 'séance compatible + confirmation donnée');
 });
 
-test('défis : une charge croissante n\'est proposée qu\'en niveau « clear » ; les défis sans exercice ne sont pas restreints', () => {
+test('défis : une charge croissante n\'est proposée qu\'en niveau « clear » ; l\'hydratation (non physique) n\'est jamais restreinte', () => {
   const policyFor = (safety, id) => app(safety).run(`getChallengePolicy(${J(id)})`);
   ['pompes30', 'gainage30', 'squats30'].forEach((id) => {
     assert.strictEqual(policyFor(NONE, id).allowed, true, id);
@@ -508,10 +512,10 @@ test('défis : une charge croissante n\'est proposée qu\'en niveau « clear » 
     assert.strictEqual(policyFor(declared(['professional_advice']), id).allowed, false, id);
     assert.strictEqual(policyFor(declared(['chest_symptoms']), id).allowed, false, id);
   });
-  ['kegel21', 'eau14'].forEach((id) => {
-    assert.strictEqual(policyFor(declared(['knees']), id).allowed, true, id);
-    assert.strictEqual(policyFor(declared(['chest_symptoms']), id).allowed, true, `${id} : défi sans exercice (validation médicale en attente)`);
-  });
+  // L'hydratation n'est pas une activité physique : jamais restreinte. Le Kegel en est une (voir tests/safety-activities.test.js).
+  assert.strictEqual(policyFor(declared(['knees']), 'eau14').allowed, true);
+  assert.strictEqual(policyFor(declared(['chest_symptoms']), 'eau14').allowed, true, 'hydratation accessible même si l\'entraînement est bloqué');
+  assert.strictEqual(policyFor(declared(['chest_symptoms']), 'kegel21').allowed, false, 'Kegel = activité physique');
   assert.strictEqual(policyFor(NONE, 'defi-inconnu').allowed, false);
   // exercice incompatible : refus explicite, aucun défi démarré
   const knees = app(declared(['knees']));

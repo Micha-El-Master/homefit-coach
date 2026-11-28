@@ -59,16 +59,18 @@
         const def = CHALLENGES[id];
         const st = getChallengeStatus(id, data.active[id], todayIso);
         const today = st.days.find((d) => d.iso === todayIso);
+        // Politique réévaluée à chaque affichage : un défi (effort ou activité physique) déjà démarré est suspendu si les précautions l'interdisent.
+        const suspended = challengeDenialMessage(getChallengePolicy(id));
         const cells = st.days
           .map((d) => {
-            const cls = ['calendar-cell', d.status === 'done' ? 'has-session' : '', d.status === 'today' ? 'today' : '', d.status === 'missed' ? 'missed' : '', d.status === 'rest' ? 'rest' : ''].join(' ');
-            const label = `Jour ${d.day} : ${{ done: 'validé', missed: 'manqué', rest: 'repos', today: "aujourd'hui", future: 'à venir' }[d.status]}`;
+            // Défi suspendu : aucun jour n'est présenté comme « manqué » (pas de pénalité visuelle).
+            const status = suspended && (d.status === 'missed' || d.status === 'today') ? 'suspended' : d.status;
+            const cls = ['calendar-cell', status === 'done' ? 'has-session' : '', status === 'today' ? 'today' : '', status === 'missed' ? 'missed' : '', status === 'rest' || status === 'suspended' ? 'rest' : ''].join(' ');
+            const label = `Jour ${d.day} : ${{ done: 'validé', missed: 'manqué', rest: 'repos', today: "aujourd'hui", future: 'à venir', suspended: 'suspendu par précaution' }[status]}`;
             return `<div class="${cls}" title="${label}" aria-label="${label}">${d.day}</div>`;
           })
           .join('');
 
-        // Politique réévaluée à chaque affichage : un défi à effort déjà démarré est suspendu si les précautions l'interdisent.
-        const suspended = def.exerciseIds.length > 0 ? challengeDenialMessage(getChallengePolicy(id)) : null;
         let action;
         if (suspended) {
           action = `<p style="font-size:14px; margin:0 0 12px; font-weight:600;" role="status">⏸️ ${suspended}</p>`;
@@ -126,6 +128,8 @@
         const def = CHALLENGES[h.id];
         const idx = data.history.indexOf(h);
         const share = h.success ? ` <a href="partager.html?type=achievement&a=${encodeURIComponent('challenge:' + idx)}" aria-label="Poster ce défi sur mon Statut" title="Poster sur mon Statut" style="text-decoration:none;">📲</a>` : '';
+        // Un défi suspendu par la politique de sécurité n'est ni une réussite ni un échec.
+        if (h.suspended) return `<div class="history-item"><span>⏸️ ${def.name}</span><span>suspendu par précaution</span></div>`;
         return `<div class="history-item"><span>${h.success ? '🏅' : '❌'} ${def.name}${share}</span><span>${h.validated}/${h.required}</span></div>`;
       })
       .join('');

@@ -46,6 +46,7 @@ const CHALLENGES = {
     target: () => 1,
     desc: 'Une routine Kegel par jour pendant 3 semaines. Suivi automatique : fais ta routine, c’est validé.',
     exerciseIds: [],
+    activity: 'kegel', // activité physique : soumise à la politique de sécurité comme une séance
     progressive: false,
   },
   eau14: {
@@ -58,6 +59,7 @@ const CHALLENGES = {
     target: () => getWaterGoalMl(),
     desc: 'Atteins ton objectif d’eau chaque jour. Suivi automatique depuis la page Nutrition.',
     exerciseIds: [],
+    activity: 'hydration', // aucune activité physique : jamais restreinte par la politique
     progressive: false,
   },
 };
@@ -121,7 +123,7 @@ function getChallengePolicy(id) {
   const def = CHALLENGES[id];
   return evaluateSafetyPolicy(getProfile(), {
     action: 'start-challenge',
-    challenge: def ? { exerciseIds: def.exerciseIds, progressive: def.progressive } : null,
+    challenge: def ? { exerciseIds: def.exerciseIds, progressive: def.progressive, activity: def.activity } : null,
   });
 }
 
@@ -166,12 +168,17 @@ function finalizeChallenges(todayIso = todayISO()) {
   Object.entries(data.active).forEach(([id, entry]) => {
     const status = getChallengeStatus(id, entry, todayIso);
     if (!status.finished) return;
+    // Un défi suspendu par la politique de sécurité n'est pas un échec : s'il n'a pas été atteint, il est archivé comme « suspendu »
+    // (ni réussite ni échec). Un défi réellement réussi reste une réussite.
+    const achieved = status.required > 0 && status.validated / status.required >= CHALLENGE_SUCCESS_RATIO;
+    const suspended = !achieved && typeof evaluateSafetyPolicy === 'function' && challengeDenialMessage(getChallengePolicy(id)) !== null;
     data.history.push({
       id,
       startDate: entry.startDate,
       validated: status.validated,
       required: status.required,
-      success: status.required > 0 && status.validated / status.required >= CHALLENGE_SUCCESS_RATIO,
+      success: achieved,
+      ...(suspended ? { suspended: true } : {}),
     });
     delete data.active[id];
     changed = true;

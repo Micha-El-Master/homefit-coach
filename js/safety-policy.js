@@ -22,6 +22,7 @@ const SAFETY_POLICY_ACTIONS = [
   'start-cycle',
   'coach-adapt',
   'swap',
+  'start-activity', // activité annexe hors séance (Kegel, hydratation…), classée par SAFETY_ACTIVITIES
 ];
 
 // Niveaux, du moins au plus restrictif.
@@ -30,6 +31,25 @@ const SAFETY_PHYSICAL_LIMITATIONS = ['knees', 'back', 'shoulders', 'balance', 'm
 const SAFETY_CYCLE_MODES = ['standard', 'maintenance', 'phase2'];
 // Adaptations du coach connues : ce sont toutes des réductions ou des substitutions (jamais une augmentation).
 const SAFETY_KNOWN_ADAPTATIONS = ['reduce-sets', 'light', 'shorter-rest', 'no-equipment', 'mini', 'comeback', 'swap-categories'];
+
+// Activités annexes, classées selon leur NATURE RÉELLE (et non selon leur présentation dans l'application) :
+//   physical:false : aucune activité physique (suivi de l'hydratation) : jamais restreinte par la politique ;
+//   physical:true  : activité physique : elle ne contourne jamais une interdiction d'entraînement, demande la confirmation
+//                    de compréhension comme une séance, et respecte le plafond d'intensité (« unknown » compte comme « high »).
+// Provisoire : aucune de ces classifications n'est validée (voir `activity-classification`).
+const SAFETY_ACTIVITIES = {
+  hydration: {
+    physical: false,
+    status: 'provisional',
+    basis: 'Suivi de la consommation d’eau : aucune activité physique.',
+  },
+  kegel: {
+    physical: true,
+    intensity: 'unknown',
+    status: 'provisional',
+    basis: 'Routine guidée de contractions musculaires : activité physique. Intensité non classée (aucune donnée existante) : traitée comme haute intensité sous restriction.',
+  },
+};
 
 // Textes de la confirmation avant la première séance. Ce n'est ni une autorisation médicale, ni une dispense de
 // responsabilité, ni une garantie de sécurité.
@@ -82,9 +102,9 @@ const SAFETY_POLICY_PARAMETERS = {
     rule: 'Formulation des messages affichés à l’utilisateur.',
     status: 'provisional', needs: 'médical', question: 'M7/M8',
   },
-  'non-exercise-challenges': {
-    rule: 'Défis sans exercice (hydratation, Kegel) non restreints par la politique.',
-    status: 'provisional', needs: 'médical', question: 'M2',
+  'activity-classification': {
+    rule: 'Activités annexes : l’hydratation n’est pas une activité physique (jamais restreinte) ; le Kegel en est une (même interdiction qu’une séance, confirmation requise, intensité non classée donc traitée comme haute).',
+    status: 'provisional', needs: 'sport + médical', question: 'M2/M5',
   },
 };
 
@@ -225,6 +245,19 @@ function evaluateSafetyPolicy(profile, context) {
     return null;
   };
 
+  // Une activité annexe suit sa nature réelle : non physique = jamais restreinte ; physique = mêmes garde-fous qu'une séance.
+  const activityDenials = (activityId) => {
+    const activity = typeof activityId === 'string' && Object.prototype.hasOwnProperty.call(SAFETY_ACTIVITIES, activityId) ? SAFETY_ACTIVITIES[activityId] : null;
+    if (!activity) return ['activity-unknown'];
+    addPending('activity-classification');
+    if (!activity.physical) return [];
+    const codes = [];
+    if (!canStartTraining) codes.push('tier-blocked');
+    if (requiresAcknowledgement) codes.push('acknowledgement-required');
+    if (!isIntensityLevelAllowed(activity.intensity, maxIntensity)) codes.push(`activity-intensity:${activityId}`);
+    return codes;
+  };
+
   // ── Décision pour l'action demandée ──
   const denied = [];
   const deny = (code) => { if (!denied.includes(code)) denied.push(code); };
@@ -247,8 +280,10 @@ function evaluateSafetyPolicy(profile, context) {
     if (!allowAdjustUp) deny('increase-not-allowed');
   } else if (action === 'start-challenge') {
     const challenge = ctx.challenge;
-    if (challenge === null || typeof challenge !== 'object' || !Array.isArray(challenge.exerciseIds) || typeof challenge.progressive !== 'boolean') {
-      deny('challenge-unknown');
+    const hasActivity = challenge !== null && typeof challenge === 'object' && challenge.activity !== undefined;
+    if (challenge === null || typeof challenge !== 'object' || !Array.isArray(challenge.exerciseIds) || typeof challenge.progressive !== 'boolean'
+        || (challenge.exerciseIds.length === 0 && !hasActivity)) {
+      deny('challenge-unknown'); // un défi sans exercice doit déclarer sa nature (activité) : jamais une autorisation implicite
     } else {
       if (challenge.exerciseIds.length > 0) {
         // Défi qui prescrit de l'effort : mêmes garde-fous qu'une séance.
@@ -256,8 +291,8 @@ function evaluateSafetyPolicy(profile, context) {
         if (requiresAcknowledgement) deny('acknowledgement-required');
         challenge.exerciseIds.forEach((id) => { const code = exerciseDenial(id); if (code) deny(code); });
       }
+      if (hasActivity) activityDenials(challenge.activity).forEach(deny);
       if (challenge.progressive && !allowChallenges) deny('progressive-challenge-not-allowed');
-      if (challenge.exerciseIds.length === 0) addPending('non-exercise-challenges');
     }
   } else if (action === 'start-cycle') {
     if (!SAFETY_CYCLE_MODES.includes(ctx.mode)) deny('cycle-mode-unknown');
@@ -270,6 +305,8 @@ function evaluateSafetyPolicy(profile, context) {
     if (!canStartTraining) deny('tier-blocked');
     const code = exerciseDenial(ctx.exerciseId);
     if (code) deny(code);
+  } else if (action === 'start-activity') {
+    activityDenials(ctx.activity).forEach(deny);
   } // 'view' : toujours autorisée (affichage des messages et des pages)
 
   return {

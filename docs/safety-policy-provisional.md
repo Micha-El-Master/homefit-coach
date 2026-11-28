@@ -34,6 +34,21 @@ avec le code.
 
 Une donnée absente, inconnue ou mal formée n'est jamais lue comme « aucune situation » et n'autorise jamais rien implicitement.
 
+### Activités annexes (classées selon leur nature réelle)
+
+| Activité | Nature | Effet de la politique |
+|---|---|---|
+| Hydratation (suivi et défi d'eau) | non physique | jamais restreinte, même si l'entraînement est bloqué |
+| Kegel (routine et défi de 21 jours) | **activité physique** | mêmes garde-fous qu'une séance : fermée si l'entraînement est bloqué, confirmation de compréhension requise sous « caution », fermée si le plafond d'intensité est « moderate » (intensité non classée donc traitée comme haute) |
+| Rappels de séance et agenda de séances | incitation à s'entraîner | aucun rappel et aucun agenda quand l'entraînement n'est pas autorisé |
+| Test de niveau | activité physique | mêmes garde-fous qu'une séance, réévalués à chaque étape |
+| Conseil du coach, bilan de la semaine | incitation à s'entraîner | aucun conseil de reprise, de rattrapage ou d'objectif quand l'entraînement n'est pas autorisé |
+| Nutrition (menus, courses), bibliothèque d'exercices, communauté, partage | non physiques (information) | hors politique |
+| Jeûne communautaire | non physique, mais question médicale distincte | hors politique ; la politique de sécurité prévaut sur ses séances de récupération ; sa compatibilité avec une situation déclarée reste à valider |
+
+Pour un utilisateur dont l'entraînement est bloqué, aucune séance « manquée » n'est affichée (⏸️ à la place de ❌ et 🔁) et un défi
+suspendu n'est ni une réussite ni un échec.
+
 ## 2. Paramètres à valider
 
 Questions à soumettre au professionnel (repères M1 à M9 du dossier de validation) :
@@ -51,7 +66,7 @@ Questions à soumettre au professionnel (repères M1 à M9 du dossier de validat
 | `recovery-after-chest` | Aucune séance de récupération proposée en cas de symptômes thoraciques | médical | M2 |
 | `urgent-signal-handling` | Signal urgent : arrêt immédiat, effacement, aucune reprise | médical | M7 |
 | `messages-wording` | Formulation des messages affichés | médical | M7/M8 |
-| `non-exercise-challenges` | Défis sans exercice (hydratation, Kegel) non restreints par la politique | médical | M2 |
+| `activity-classification` | Activités annexes classées selon leur nature réelle : l'hydratation n'est pas une activité physique (jamais restreinte) ; le Kegel en est une (même interdiction qu'une séance, confirmation requise, intensité non classée donc traitée comme haute) | sport + médical | M2/M5 |
 
 ## 3. Classification d'intensité (registre `js/safety-intensity.js`)
 

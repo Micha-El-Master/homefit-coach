@@ -136,7 +136,10 @@
     const gap = last ? daysBetween(last, todayISO()) : null;
     const trend = getFeelingTrend();
     let text;
-    if (gap !== null && gap >= 10) {
+    if (!evaluateSafetyPolicy(getProfile(), { action: 'view' }).canStartTraining) {
+      // Entraînement suspendu par la politique de sécurité : aucun conseil qui pousse à reprendre, à s'entraîner ou à adapter une séance.
+      text = 'Ton entraînement est suspendu par précaution : le coach ne propose aucune adaptation de séance pour le moment.';
+    } else if (gap !== null && gap >= 10) {
       text = `Ta dernière séance date de ${gap} jours. Choisis « Je reprends après une pause » pour une reprise en douceur.`;
     } else if (trend === 'dur') {
       text = 'Tes deux dernières séances étaient dures : la prochaine est déjà allégée. Si tu es fatigué, choisis « Je suis fatigué(e) ».';

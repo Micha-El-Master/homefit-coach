@@ -1118,8 +1118,11 @@ function buildFastICS(fast, now = new Date()) {
   ].join('\r\n');
 }
 
+// Retourne false (sans rien créer) quand l'entraînement n'est pas autorisé : un agenda de séances n'est jamais proposé dans ce cas.
 function downloadICS() {
+  if (typeof evaluateSafetyPolicy !== 'function' || !evaluateSafetyPolicy(getProfile(), { action: 'view' }).canStartTraining) return false;
   downloadBlob(new Blob([buildICS()], { type: 'text/calendar;charset=utf-8' }), 'homefit-coach-agenda.ics');
+  return true;
 }
 
 function getWeekStats() {

@@ -95,9 +95,12 @@
     document.getElementById('week-prev').disabled = monday <= firstMonday;
     document.getElementById('week-next').disabled = isCurrent;
 
-    document.getElementById('recap-sessions').textContent = `${recap.count}/${recap.target} séances`;
-    document.getElementById('recap-status').textContent =
-      recap.count >= recap.target ? '✅ Objectif atteint' : isCurrent ? '⏳ En cours' : '❌ Objectif manqué';
+    // Semaine en cours avec entraînement suspendu par la politique de sécurité : ni objectif, ni « manqué ».
+    const suspendedNow = isCurrent && typeof evaluateSafetyPolicy === 'function' && !evaluateSafetyPolicy(getProfile(), { action: 'view' }).canStartTraining;
+    document.getElementById('recap-sessions').textContent = suspendedNow ? `${recap.count} séance${recap.count > 1 ? 's' : ''}` : `${recap.count}/${recap.target} séances`;
+    document.getElementById('recap-status').textContent = suspendedNow
+      ? '⏸️ Entraînement suspendu par précaution'
+      : recap.count >= recap.target ? '✅ Objectif atteint' : isCurrent ? '⏳ En cours' : '❌ Objectif manqué';
     document.getElementById('recap-sub').textContent = [
       recap.holdSeconds ? `+ ${recap.holdSeconds} s de gainage` : '',
       recap.recoveries ? `🧘 ${recap.recoveries} séance${recap.recoveries > 1 ? 's' : ''} de récupération` : '',

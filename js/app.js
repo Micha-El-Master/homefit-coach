@@ -81,6 +81,10 @@ function checkDailyReminder() {
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
   if (nowMinutes < reminderMinutes) return;
 
+  // Politique de sécurité : aucun rappel qui pousse à s'entraîner quand l'entraînement n'est pas autorisé. Si la politique ne
+  // peut pas être évaluée (page sans le moteur de sécurité), rien n'est envoyé : une donnée inconnue n'autorise rien.
+  if (typeof evaluateSafetyPolicy !== 'function' || !evaluateSafetyPolicy(getProfile(), { action: 'view' }).canStartTraining) return;
+
   // Rappel seulement les jours d'entraînement du plan (y compris un jour de rattrapage) sans séance faite.
   const todayPlan = getWeekPlan().days.find((d) => d.isToday);
   if (!todayPlan || todayPlan.type !== 'training' || todayPlan.done) return;

@@ -38,6 +38,7 @@
         <li style="margin-bottom:6px;">⚡ Contractions rapides : <strong>10 répétitions</strong></li>
         <li>⏱️ Durée estimée : <strong id="kegel-duration">…</strong></li>
       </ul>
+      <div id="kegel-policy" style="display:none; margin:0 0 14px;" role="status"></div>
       <button class="btn btn-primary" id="start-kegel-btn">Commencer la routine</button>
     </div>
 
@@ -74,6 +75,10 @@
 <nav class="bottom-nav" id="bottom-nav" aria-label="Navigation principale"></nav>
 
 <script src="js/storage.js"></script>
+<script src="js/safety.js"></script>
+<script src="js/safety-intensity.js"></script>
+<script src="js/safety-policy.js"></script>
+<script src="js/safety-ui.js"></script>
 <script src="js/timer.js"></script>
 <script src="js/app.js"></script>
 <script>
@@ -115,7 +120,43 @@
   let phaseIdx = 0;
   let repIdx = 0;
 
-  document.getElementById('start-kegel-btn').addEventListener('click', () => {
+  // Le Kegel est une activité PHYSIQUE : la politique de sécurité s'applique comme pour une séance (jamais contournée ici),
+  // recalculée avec le profil actuel à l'affichage, au démarrage et à chaque répétition.
+  const kegelDecision = () => evaluateSafetyPolicy(getProfile(), { action: 'start-activity', activity: 'kegel' });
+  const hardDenial = (d) => d.reasons.some((r) => r.startsWith('denied:') && r !== 'denied:acknowledgement-required');
+  const startBtn = document.getElementById('start-kegel-btn');
+  function renderKegelGate() {
+    const decision = kegelDecision();
+    renderSafetyMessages(document.getElementById('kegel-policy'), decision.messages, { skip: ['acknowledgement-required'] });
+    if (hardDenial(decision)) {
+      const blocked = !decision.canStartTraining;
+      startBtn.disabled = true;
+      startBtn.textContent = blocked ? 'Activité suspendue par précaution' : 'Routine indisponible avec tes précautions';
+      if (!blocked) {
+        const note = document.getElementById('kegel-policy');
+        note.insertAdjacentHTML('beforeend', '<p style="font-size:13px; line-height:1.5; margin:0 0 8px;">🛡️ Cette routine n’est pas proposée avec tes précautions actuelles : son intensité n’est pas classée.</p>');
+        note.style.display = 'block';
+      }
+    }
+  }
+  renderKegelGate();
+
+  // Arrêt si la politique l'interdit en cours de routine (précautions modifiées dans un autre onglet).
+  let kegelHalted = false;
+  function haltKegel() {
+    kegelHalted = true;
+    if (activeTimer) activeTimer.cancel();
+    releaseWakeLock();
+    location.reload();
+  }
+
+  startBtn.addEventListener('click', async () => {
+    const decision = kegelDecision();
+    if (hardDenial(decision)) {
+      location.reload(); // précautions modifiées depuis l'affichage : on recalcule, aucune routine n'est lancée
+      return;
+    }
+    if (decision.requiresAcknowledgement && !(await requestSafetyAcknowledgement())) return;
     sessionStart = Date.now();
     acquireWakeLock();
     phaseIdx = 0;
@@ -135,6 +176,8 @@
   });
 
   function runRep() {
+    if (kegelHalted) return;
+    if (hardDenial(kegelDecision())) { haltKegel(); return; }
     if (phaseIdx >= PHASES.length) {
       finishKegel();
       return;

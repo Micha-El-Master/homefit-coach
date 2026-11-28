@@ -49,6 +49,10 @@ function getWeekRecap(monday) {
 }
 
 function getWeekTip(recap, isCurrentWeek) {
+  // Entraînement suspendu par la politique de sécurité : aucun conseil qui pousse à s'entraîner ni qui parle de séance « manquée ».
+  if (isCurrentWeek && typeof evaluateSafetyPolicy === 'function' && !evaluateSafetyPolicy(getProfile(), { action: 'view' }).canStartTraining) {
+    return 'Ton entraînement est suspendu par précaution : aucune séance n’est attendue de ta part pour le moment.';
+  }
   const { count, target, feelings } = recap;
   const rated = feelings.dur + feelings.bien + feelings.facile;
   if (count === 0) {

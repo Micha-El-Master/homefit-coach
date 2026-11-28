@@ -316,10 +316,15 @@
   }
 
   const DAY_SHORT = { 1: 'Lun', 2: 'Mar', 3: 'Mer', 4: 'Jeu', 5: 'Ven', 6: 'Sam', 0: 'Dim' };
+  // Entraînement suspendu par la politique de sécurité : aucune séance n'est attendue, donc ni ❌ « manqué », ni 🔁 « rattrapage »,
+  // ni 🏋️ « entraînement » sur les jours non faits (les séances déjà faites restent affichées).
+  const suspendedWeek = !policy.canStartTraining;
+  if (suspendedWeek) document.querySelector('.week-strip-legend').textContent = '✅ fait · ⏸️ suspendu par précaution · 😌 repos';
   document.getElementById('week-strip').innerHTML = plan.days
     .map((d) => {
-      const icon = d.beforeStart ? '·' : d.done ? '✅' : d.missed ? '❌' : d.rescue ? '🔁' : d.type === 'fast' ? '🌿' : d.type === 'training' ? '🏋️' : '😌';
-      const cls = ['wd', d.isToday ? 'today' : '', d.done ? 'done' : '', d.rescue && !d.done ? 'rescue' : ''].join(' ');
+      const pending = suspendedWeek && !d.done && !d.beforeStart && d.type !== 'fast' && d.type !== 'rest';
+      const icon = d.beforeStart ? '·' : d.done ? '✅' : pending ? '⏸️' : d.missed ? '❌' : d.rescue ? '🔁' : d.type === 'fast' ? '🌿' : d.type === 'training' ? '🏋️' : '😌';
+      const cls = ['wd', d.isToday ? 'today' : '', d.done ? 'done' : '', d.rescue && !d.done && !pending ? 'rescue' : ''].join(' ');
       return `<div class="${cls}">${DAY_SHORT[d.weekday]}<span class="ico">${icon}</span></div>`;
     })
     .join('');

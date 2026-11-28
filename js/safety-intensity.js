@@ -73,13 +73,19 @@ function getExerciseIntensity(exerciseId) {
   return { intensity: entry.intensity, status: entry.status === 'validated' ? 'validated' : 'provisional', basis: entry.basis, registered: true };
 }
 
-// maxIntensity : 'low' | 'moderate' | 'high' | null (null = aucun exercice autorisé).
-// Un exercice « unknown » est considéré « high » : il n'est autorisé que lorsque le plafond est « high ».
-function isExerciseIntensityAllowed(exerciseId, maxIntensity) {
+// maxIntensity : 'low' | 'moderate' | 'high' | null (null = rien n'est autorisé).
+// « unknown » est considéré « high » : n'est autorisé que lorsque le plafond est « high ».
+// Un plafond ou un niveau inconnu n'est jamais une autorisation implicite.
+function isIntensityLevelAllowed(level, maxIntensity) {
   if (maxIntensity === null || maxIntensity === undefined) return false;
   const ceiling = SAFETY_INTENSITY_RANK[maxIntensity];
-  if (ceiling === undefined) return false; // plafond inconnu : jamais une autorisation implicite
-  return SAFETY_INTENSITY_RANK[getExerciseIntensity(exerciseId).intensity] <= ceiling;
+  const rank = SAFETY_INTENSITY_RANK[level];
+  if (ceiling === undefined || rank === undefined) return false;
+  return rank <= ceiling;
+}
+
+function isExerciseIntensityAllowed(exerciseId, maxIntensity) {
+  return isIntensityLevelAllowed(getExerciseIntensity(exerciseId).intensity, maxIntensity);
 }
 
 // Exercices dont la classification reste provisoire (tous, tant qu'aucune validation n'a eu lieu) : pour la documentation.
