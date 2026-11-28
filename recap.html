@@ -96,7 +96,7 @@
     document.getElementById('week-next').disabled = isCurrent;
 
     // Semaine en cours avec entraînement suspendu par la politique de sécurité : ni objectif, ni « manqué ».
-    const suspendedNow = isCurrent && typeof evaluateSafetyPolicy === 'function' && !evaluateSafetyPolicy(getProfile(), { action: 'view' }).canStartTraining;
+    const suspendedNow = isCurrent && !isTrainingAuthorizedNow();
     document.getElementById('recap-sessions').textContent = suspendedNow ? `${recap.count} séance${recap.count > 1 ? 's' : ''}` : `${recap.count}/${recap.target} séances`;
     document.getElementById('recap-status').textContent = suspendedNow
       ? '⏸️ Entraînement suspendu par précaution'

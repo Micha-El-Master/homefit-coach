@@ -456,7 +456,9 @@ test('non-régression : DATA_SCHEMA_VERSION inchangé et export global au même 
   assert.strictEqual(a.run('DATA_SCHEMA_VERSION'), 1);
   const data = a.run('collectExportData()');
   assert.strictEqual(data.schemaVersion, 1);
-  assert.deepStrictEqual(Object.keys(data).sort(), ['adjustments', 'app', 'challenges', 'exportedAt', 'kegel', 'profile', 'recovery', 'schemaVersion', 'sessions', 'settings', 'shopping', 'water']);
+  assert.deepStrictEqual(Object.keys(data).sort(), ['adjustments', 'app', 'challenges', 'exportedAt', 'kegel', 'profile', 'recovery', 'safetySuspension', 'schemaVersion', 'sessions', 'settings', 'shopping', 'water']);
+  // Champ additif et facultatif à l'import : la version de schéma ne change pas, les anciennes sauvegardes restent compatibles.
+  assert.deepStrictEqual(data.safetySuspension, []);
 });
 
 test('non-régression : export puis import de chaque état restitue le même état', () => {

@@ -50,7 +50,7 @@ function getWeekRecap(monday) {
 
 function getWeekTip(recap, isCurrentWeek) {
   // Entraînement suspendu par la politique de sécurité : aucun conseil qui pousse à s'entraîner ni qui parle de séance « manquée ».
-  if (isCurrentWeek && typeof evaluateSafetyPolicy === 'function' && !evaluateSafetyPolicy(getProfile(), { action: 'view' }).canStartTraining) {
+  if (isCurrentWeek && !isTrainingAuthorizedNow()) { // entraînement interdit OU politique illisible : aucune incitation
     return 'Ton entraînement est suspendu par précaution : aucune séance n’est attendue de ta part pour le moment.';
   }
   const { count, target, feelings } = recap;
@@ -71,7 +71,12 @@ function getWeekTip(recap, isCurrentWeek) {
   }
   if (rated && feelings.facile > feelings.dur && feelings.facile >= feelings.bien) {
     // Le conseil d'augmenter l'intensité n'est donné que si la politique de sécurité l'autorise.
-    const canIncrease = typeof evaluateSafetyPolicy !== 'function' || evaluateSafetyPolicy(getProfile(), { action: 'adjust-up' }).allowed;
+    let canIncrease = false; // fail-closed : moteur absent ou en erreur = aucune invitation à monter
+    try {
+      canIncrease = typeof evaluateSafetyPolicy === 'function' && evaluateSafetyPolicy(getProfile(), { action: 'adjust-up' }).allowed === true;
+    } catch (e) {
+      canIncrease = false;
+    }
     return canIncrease
       ? 'Objectif atteint et séances faciles : tu peux monter en intensité avec « trop facile » pendant la séance.'
       : 'Objectif atteint et séances faciles : ta progression reste limitée tant que ton questionnaire de sécurité n’est pas complété ou si tes précautions la limitent.';

@@ -39,7 +39,7 @@
 <div class="app-shell" role="main">
   <a href="dashboard.html" class="back-link">← Retour</a>
   <h1 style="margin-top:0;">🌿 Jeûne communautaire</h1>
-  <p style="font-size:14px; line-height:1.6; margin:-8px 0 16px;">Un jeûne de 3 jours par mois, en général du mercredi au vendredi. Pendant ces jours, ton programme se met en pause : récupération douce, puis reprise progressive.</p>
+  <p id="fast-intro" style="font-size:14px; line-height:1.6; margin:-8px 0 16px;">Un jeûne de 3 jours par mois, en général du mercredi au vendredi. Pendant ces jours, ton programme se met en pause : récupération douce, puis reprise progressive.</p>
 
   <div class="safe-card">
     <strong>Un choix personnel.</strong>
@@ -57,21 +57,21 @@
     <div class="cal-head" aria-hidden="true"><span>Lun</span><span>Mar</span><span>Mer</span><span>Jeu</span><span>Ven</span><span>Sam</span><span>Dim</span></div>
     <div class="cal-grid" id="cal-grid"></div>
     <div class="cal-legend">
-      <div><i style="background:#17181c"></i><span><b>Jeûne</b> : récupération douce uniquement</span></div>
-      <div><i style="background:#dff5ee"></i><span><b>Reprise</b> : séances allégées, puis retour progressif</span></div>
-      <div><i style="background:var(--primary-light)"></i><span><b>Séance</b> prévue</span></div>
+      <div><i style="background:#17181c"></i><span id="legend-fast"><b>Jeûne</b> : récupération douce uniquement</span></div>
+      <div><i style="background:#dff5ee"></i><span id="legend-refeed"><b>Reprise</b> : séances allégées, puis retour progressif</span></div>
+      <div id="legend-training"><i style="background:var(--primary-light)"></i><span><b>Séance</b> prévue</span></div>
       <div><i style="background:var(--surface-2)"></i><span><b>Repos</b></span></div>
     </div>
-    <p style="font-size:13px; color:var(--text-muted); line-height:1.5; margin:12px 0 0;">Les séances prévues pendant le jeûne sont dispensées : elles ne comptent pas dans l’objectif de la semaine, ta série n’est pas pénalisée.</p>
+    <p id="fast-excused" style="font-size:13px; color:var(--text-muted); line-height:1.5; margin:12px 0 0;">Les séances prévues pendant le jeûne sont dispensées : elles ne comptent pas dans l’objectif de la semaine, ta série n’est pas pénalisée.</p>
   </div>
 
   <div class="card">
     <h2>Ma préparation</h2>
     <ul style="margin:0; padding-left:20px; font-size:14px; line-height:1.8; list-style:disc;">
-      <li>La veille : dernier repas léger, sans alcool. C’est ta dernière séance complète.</li>
+      <li id="prep-eve">La veille : dernier repas léger, sans alcool. C’est ta dernière séance complète.</li>
       <li>Prévois de l’eau, des tisanes et du bouillon.</li>
       <li>Pendant le jeûne : bois régulièrement, reste au calme, évite l’effort intense.</li>
-      <li>Reprise : repas légers, petites portions, mâchés lentement. Les séances repartent à 60 % puis remontent de 10 % par jour. La reprise dure environ la moitié du jeûne, au moins 2 jours.</li>
+      <li id="prep-refeed">Reprise : repas légers, petites portions, mâchés lentement. Les séances repartent à 60 % puis remontent de 10 % par jour. La reprise dure environ la moitié du jeûne, au moins 2 jours.</li>
     </ul>
   </div>
 
@@ -97,6 +97,9 @@
 <nav class="bottom-nav" id="bottom-nav" aria-label="Navigation principale"></nav>
 
 <script src="js/storage.js"></script>
+<script src="js/safety.js"></script>
+<script src="js/safety-intensity.js"></script>
+<script src="js/safety-policy.js"></script>
 <script src="js/exercises.js"></script>
 <script src="js/community.js"></script>
 <script src="js/app.js"></script>
@@ -182,6 +185,7 @@
     const planned = getTrainingDays();
     const profile = getProfile();
     const startIso = profile ? profile.startDate : '0000-00-00';
+    const trainingOk = isTrainingAuthorizedNow();
     for (let i = 0; i < lead; i++) grid.appendChild(el('div', { class: 'cal-cell empty' }));
     for (let day = 1; day <= count; day++) {
       const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
@@ -190,8 +194,8 @@
       let cls = 'rest';
       let label = 'repos';
       if (phase && phase.phase === 'fast') { cls = 'fast'; label = 'jeûne'; }
-      else if (phase && phase.phase === 'refeed') { cls = 'refeed'; label = `reprise, séance à ${Math.round(phase.factor * 100)} %`; }
-      else if (planned.includes(weekday) && iso >= startIso) { cls = 'training'; label = 'séance prévue'; }
+      else if (phase && phase.phase === 'refeed') { cls = 'refeed'; label = trainingOk ? `reprise, séance à ${Math.round(phase.factor * 100)} %` : 'reprise'; }
+      else if (planned.includes(weekday) && iso >= startIso) { cls = trainingOk ? 'training' : 'rest'; label = trainingOk ? 'séance prévue' : 'suspendu par précaution'; }
       const cell = el('div', { class: `cal-cell ${cls}${iso === todayIso ? ' today' : ''}` });
       cell.appendChild(el('span', { text: String(day), 'aria-hidden': 'true' }));
       cell.appendChild(el('span', { class: 'sr-only', text: `${formatDateFr(iso)} : ${label}` }));
@@ -217,7 +221,23 @@
     });
   }
 
+  // Aucun texte n'annonce ni n'incite une séance (ou une récupération) quand l'entraînement n'est pas autorisé, ou quand la politique
+  // de sécurité ne peut pas être évaluée. Aucune règle propre au jeûne : seule la politique centrale décide.
+  function applyTrainingTexts() {
+    const ok = isTrainingAuthorizedNow();
+    $('fast-intro').textContent = ok
+      ? 'Un jeûne de 3 jours par mois, en général du mercredi au vendredi. Pendant ces jours, ton programme se met en pause : récupération douce, puis reprise progressive.'
+      : 'Un jeûne de 3 jours par mois, en général du mercredi au vendredi. Aucune séance n’est proposée pour le moment (entraînement suspendu par précaution).';
+    $('legend-fast').innerHTML = ok ? '<b>Jeûne</b> : récupération douce uniquement' : '<b>Jeûne</b>';
+    $('legend-refeed').innerHTML = ok ? '<b>Reprise</b> : séances allégées, puis retour progressif' : '<b>Reprise</b>';
+    $('legend-training').style.display = ok ? '' : 'none';
+    $('fast-excused').style.display = ok ? '' : 'none';
+    $('prep-eve').style.display = ok ? '' : 'none';
+    $('prep-refeed').style.display = ok ? '' : 'none';
+  }
+
   function refresh() {
+    applyTrainingTexts();
     renderNext();
     renderCalendar();
     renderMine();

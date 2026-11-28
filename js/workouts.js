@@ -344,6 +344,12 @@ function applyEquipment(exercises, equipment, profile = null, policy = null) {
 // Message selon la phase de jeûne du jour (null hors jeûne).
 function getFastNote(phase) {
   if (!phase) return null;
+  // Si l'entraînement n'est pas autorisé (ou si la politique est illisible), aucun texte n'annonce ni n'incite une séance.
+  if (phase.phase !== 'fast' && !isTrainingAuthorizedNow()) {
+    return phase.phase === 'refeed'
+      ? `Reprise après le jeûne, jour ${phase.day} sur ${phase.refeedDays} : aucune séance n'est proposée par précaution. Bois régulièrement.`
+      : 'Veille du jeûne : aucune séance n\'est proposée par précaution. Prévois de l\'eau, des tisanes et du bouillon.';
+  }
   if (phase.phase === 'fast') return `Jeûne, jour ${phase.day} sur ${phase.days} : pas d'effort intense. Arrête-toi, assieds-toi et bois si tu as un vertige, des palpitations ou des nausées.`;
   if (phase.phase === 'refeed') return `Reprise après le jeûne, jour ${phase.day} sur ${phase.refeedDays} : séance à ${Math.round(phase.factor * 100)} % du volume. Remonte en douceur.`;
   return 'Veille du jeûne : dernière séance complète. Prévois un repas léger, de l\'eau, des tisanes et du bouillon.';

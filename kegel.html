@@ -39,7 +39,7 @@
         <li>⏱️ Durée estimée : <strong id="kegel-duration">…</strong></li>
       </ul>
       <div id="kegel-policy" style="display:none; margin:0 0 14px;" role="status"></div>
-      <button class="btn btn-primary" id="start-kegel-btn">Commencer la routine</button>
+      <button class="btn btn-primary" id="start-kegel-btn" data-physical-entry>Commencer la routine</button>
     </div>
 
     <div class="card">
@@ -59,6 +59,7 @@
       <p style="font-size:14px; color:var(--text-muted); margin:0 0 8px;" id="kegel-rep-label">Répétition 1/10</p>
       <div class="timer-circle" id="kegel-timer">Contracte</div>
       <p style="font-size:13px; color:var(--text-muted);">Suis le rythme affiché à l'écran</p>
+      <button type="button" class="btn btn-outline safety-btn" id="kegel-safety-btn">🛑 Douleur ou malaise</button>
     </div>
   </div>
 
@@ -175,6 +176,36 @@
     }
   });
 
+  // Signal « Douleur ou malaise » : le MÊME dispositif que la séance (fenêtre partagée de safety-ui.js, signaux de safety.js).
+  // Arrêt immédiat de la routine ; aucune séance n'est enregistrée ; aucun détail médical n'est conservé ; aucune reprise après
+  // un arrêt. « Tout va bien » ne reprend qu'après une nouvelle évaluation de la politique. Rien n'est écrit durablement.
+  let kegelPausedMs = null;
+  document.getElementById('kegel-safety-btn').addEventListener('click', () => {
+    if (kegelHalted) return;
+    if (activeTimer && typeof activeTimer.pause === 'function') kegelPausedMs = activeTimer.pause();
+    openSafetySignalDialog({
+      intro: 'Ta routine est en pause. Choisis ce que tu ressens.',
+      stopLabel: 'Arrêter la routine',
+      laterLabel: null,
+      onUrgent: () => {
+        kegelHalted = true; // effacement immédiat : la routine ne peut plus ni reprendre ni être enregistrée
+        if (activeTimer) activeTimer.cancel();
+        releaseWakeLock();
+      },
+      onResume: () => {
+        if (hardDenial(kegelDecision())) { haltKegel(); return; } // réévaluation avant toute reprise
+        if (activeTimer && typeof activeTimer.resume === 'function') activeTimer.resume(kegelPausedMs);
+        kegelPausedMs = null;
+      },
+      onStop: () => {
+        kegelHalted = true;
+        if (activeTimer) activeTimer.cancel();
+        releaseWakeLock();
+        location.href = 'dashboard.html';
+      },
+    });
+  });
+
   function runRep() {
     if (kegelHalted) return;
     if (hardDenial(kegelDecision())) { haltKegel(); return; }
@@ -220,6 +251,7 @@
   }
 
   function finishKegel() {
+    if (kegelHalted) return;
     releaseWakeLock();
     const duration = Math.round((Date.now() - sessionStart) / 1000);
     addKegelLog({ date: todayISO(), duration });

@@ -81,8 +81,8 @@
     <h2 id="today-title">Aujourd'hui</h2>
     <p id="today-subtitle" style="color:var(--text-muted); font-size:14px; margin-top:-8px;"></p>
     <p id="today-duration" style="font-size:14px;"></p>
-    <a id="today-cta" class="btn btn-primary" href="workout.html">Commencer l'entraînement</a>
-    <a id="recovery-link" class="btn btn-outline" href="workout.html?s=R%C3%A9cup%C3%A9ration" style="display:none; margin-top:10px;">🧘 Séance de récupération (~8 min)</a>
+    <a id="today-cta" data-physical-entry class="btn btn-primary" href="workout.html">Commencer l'entraînement</a>
+    <a id="recovery-link" data-physical-entry class="btn btn-outline" href="workout.html?s=R%C3%A9cup%C3%A9ration" style="display:none; margin-top:10px;">🧘 Séance de récupération (~8 min)</a>
   </div>
 
   <div class="card" id="safety-dashboard-card" style="display:none; border:1.5px solid var(--primary);">
@@ -176,7 +176,7 @@
       } else if (mine && daysBetween(todayIso, mine.start) <= 14) {
         const n = daysBetween(todayIso, mine.start);
         title.textContent = '🌿 Prochain jeûne';
-        text.textContent = `Du ${range(mine)} (${n > 1 ? `dans ${n} jours` : 'demain'}). Tes séances de ces jours-là sont remplacées par de la récupération douce.`;
+        text.textContent = `Du ${range(mine)} (${n > 1 ? `dans ${n} jours` : 'demain'}).${isTrainingAuthorizedNow() ? ' Tes séances de ces jours-là sont remplacées par de la récupération douce.' : ''}`;
       } else if (announced && daysBetween(todayIso, announced.start) <= 21) {
         title.textContent = '🌿 Jeûne communautaire annoncé';
         text.textContent = `Du ${range(announced)}. Participer est un choix personnel : ouvre le calendrier pour en savoir plus.`;
@@ -322,7 +322,7 @@
   if (suspendedWeek) document.querySelector('.week-strip-legend').textContent = '✅ fait · ⏸️ suspendu par précaution · 😌 repos';
   document.getElementById('week-strip').innerHTML = plan.days
     .map((d) => {
-      const pending = suspendedWeek && !d.done && !d.beforeStart && d.type !== 'fast' && d.type !== 'rest';
+      const pending = (suspendedWeek || (d.suspended && d.isPast)) && !d.done && !d.beforeStart && d.type !== 'fast' && d.type !== 'rest';
       const icon = d.beforeStart ? '·' : d.done ? '✅' : pending ? '⏸️' : d.missed ? '❌' : d.rescue ? '🔁' : d.type === 'fast' ? '🌿' : d.type === 'training' ? '🏋️' : '😌';
       const cls = ['wd', d.isToday ? 'today' : '', d.done ? 'done' : '', d.rescue && !d.done && !pending ? 'rescue' : ''].join(' ');
       return `<div class="${cls}">${DAY_SHORT[d.weekday]}<span class="ico">${icon}</span></div>`;

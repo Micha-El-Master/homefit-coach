@@ -275,14 +275,25 @@ test('agenda : buildICS (génération pure) reste inchangé', () => {
 
 // ───────────── Plan et série : la logique n'est pas modifiée ─────────────
 
-test('plan et série : la politique ne modifie ni le plan de la semaine ni la série (seul l\'affichage change)', () => {
-  const profiles = [NONE, declared(['chest_symptoms']), withAck({ status: 'unanswered' }), declared(['knees'])];
+test('plan et série : seul un blocage en cours neutralise aujourd\'hui ; les autres profils ne changent rien', () => {
   const sessions = [{ date: '2026-10-05', title: 'Haut du corps', exercises: [] }, { date: '2026-10-07', title: 'Jambes + Abdos', exercises: [] }];
-  const outputs = profiles.map((safety) => {
+  const output = (safety) => {
     const a = app(safety);
     a.settings({ trainingDays: [1, 2, 4, 5], equipment: ['chaise'] });
     a.sessions(sessions);
-    return J({ plan: a.run('getWeekPlan()'), streak: a.run('getStreak()'), target: a.run('getWeekTarget(isoOf(mondayOf(new Date())))'), progress: a.run('getProgramProgress().sessionsCompleted') });
-  });
+    return { plan: a.run('getWeekPlan()'), streak: a.run('getStreak()'), target: a.run('getWeekTarget(isoOf(mondayOf(new Date())))'), progress: a.run('getProgramProgress().sessionsCompleted') };
+  };
+  const outputs = [NONE, withAck({ status: 'unanswered' }), declared(['knees'])].map((s) => J(output(s)));
   outputs.forEach((out) => assert.strictEqual(out, outputs[0]));
+  // Blocage en cours : seul aujourd'hui (jeudi) est marqué « suspendu » (ni manqué, ni dette). Les jours passés sans historique de blocage restent inchangés.
+  const blocked = output(declared(['chest_symptoms']));
+  const base = JSON.parse(outputs[0]);
+  assert.strictEqual(blocked.streak, base.streak);
+  assert.strictEqual(blocked.target, base.target);
+  assert.strictEqual(blocked.progress, base.progress);
+  blocked.plan.days.forEach((d, i) => {
+    const { suspended, ...rest } = d;
+    assert.deepStrictEqual(rest, base.plan.days[i]);
+    assert.strictEqual(!!suspended, d.isToday);
+  });
 });

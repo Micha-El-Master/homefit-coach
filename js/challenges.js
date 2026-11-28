@@ -154,15 +154,24 @@ function abandonChallenge(id) {
   saveChallengeData(data);
 }
 
+// Enregistre la valeur d'un jour. Retourne true si elle a été enregistrée. La politique est réévaluée ICI (pas seulement dans les pages) :
+// un défi physique refusé ne peut pas être alimenté par un appel direct, et un défi dont la politique ne peut pas être évaluée n'est
+// jamais alimenté. Un défi non physique autorisé (hydratation) continue de fonctionner. Un refus ne modifie rien : ni réussite ni échec.
 function logChallenge(id, value, iso = todayISO()) {
+  if (!Object.prototype.hasOwnProperty.call(CHALLENGES, id)) return false;
+  if (typeof evaluateSafetyPolicy !== 'function' || !getChallengePolicy(id).allowed) return false;
+  if (typeof value !== 'number' || !Number.isFinite(value) || !isIsoDate(iso)) return false;
   const data = getChallengeData();
-  if (!data.active[id]) return;
+  if (!data.active[id]) return false;
   data.active[id].log[iso] = Math.max(0, value);
   saveChallengeData(data);
+  return true;
 }
 
 // Termine les défis dont la dernière journée est passée : ils passent dans l'historique avec leur résultat.
 function finalizeChallenges(todayIso = todayISO()) {
+  // Fail-closed : sans moteur de sécurité on ne peut pas distinguer un échec d'une suspension ; rien n'est archivé (ni échec injuste).
+  if (typeof evaluateSafetyPolicy !== 'function') return false;
   const data = getChallengeData();
   let changed = false;
   Object.entries(data.active).forEach(([id, entry]) => {
@@ -171,7 +180,7 @@ function finalizeChallenges(todayIso = todayISO()) {
     // Un défi suspendu par la politique de sécurité n'est pas un échec : s'il n'a pas été atteint, il est archivé comme « suspendu »
     // (ni réussite ni échec). Un défi réellement réussi reste une réussite.
     const achieved = status.required > 0 && status.validated / status.required >= CHALLENGE_SUCCESS_RATIO;
-    const suspended = !achieved && typeof evaluateSafetyPolicy === 'function' && challengeDenialMessage(getChallengePolicy(id)) !== null;
+    const suspended = !achieved && challengeDenialMessage(getChallengePolicy(id)) !== null;
     data.history.push({
       id,
       startDate: entry.startDate,

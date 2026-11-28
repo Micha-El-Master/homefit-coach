@@ -16,6 +16,7 @@ const STORAGE_KEYS = {
   IN_PROGRESS: 'hfc_inprogress',
   RECOVERY: 'hfc_recovery',
   CHALLENGES: 'hfc_challenges',
+  SAFETY_SUSPENSION: 'hfc_safety_suspension',
 };
 
 function readJSON(key, fallback) {
@@ -45,7 +46,9 @@ function getProfile() {
 }
 
 function saveProfile(profile) {
-  return writeJSON(STORAGE_KEYS.PROFILE, profile);
+  const saved = writeJSON(STORAGE_KEYS.PROFILE, profile);
+  if (saved) syncSafetySuspension(); // un blocage décidé dans les réglages est mémorisé tout de suite (gestion neutre de la série)
+  return saved;
 }
 
 function hasProfile() {
@@ -230,7 +233,8 @@ function getAdjustments() {
 function changeAdjustment(exerciseId, delta) {
   const adj = getAdjustments();
   // Politique de sécurité : une hausse n'est jamais mémorisée si elle est interdite (les baisses restent toujours possibles).
-  if (delta > 0 && typeof evaluateSafetyPolicy === 'function' && !evaluateSafetyPolicy(getProfile(), { action: 'adjust-up' }).allowed) {
+  // Fail-closed : sans moteur de sécurité (ou si l'évaluation échoue), aucune hausse n'est mémorisée.
+  if (delta > 0 && (typeof evaluateSafetyPolicy !== 'function' || !evaluateSafetyPolicy(getProfile(), { action: 'adjust-up' }).allowed)) {
     return adj[exerciseId] || 0;
   }
   adj[exerciseId] = (adj[exerciseId] || 0) + delta;
@@ -386,7 +390,7 @@ function joinCohort(dateIso, todayIso = todayISO()) {
 }
 
 function startNextCycle(mode) {
-  if (typeof evaluateSafetyPolicy === 'function' && !evaluateSafetyPolicy(getProfile(), { action: 'start-cycle', mode }).allowed) {
+  if (typeof evaluateSafetyPolicy !== 'function' || !evaluateSafetyPolicy(getProfile(), { action: 'start-cycle', mode }).allowed) {
     throw new Error('Ce programme n’est pas disponible avec tes précautions actuelles.');
   }
   const profile = getProfile();
@@ -409,6 +413,66 @@ function mondayOf(d) {
   return m;
 }
 
+// Suspension de sécurité (jours où l'entraînement était interdit par la politique). Gestion NEUTRE : un jour suspendu n'est ni une séance
+// ni un jour manqué ; il ne crée ni dette ni rattrapage, ne casse pas la série et ne donne aucune récompense. Règle de produit provisoire
+// (aucune valeur médicale). Seuls des jours (dates ISO) sont conservés : jamais le motif ni la situation déclarée.
+const MAX_SAFETY_SUSPENSION_DAYS = 800;
+
+// Liste normalisée : dates valides, sans doublon, triées ; au-delà du plafond, seuls les jours les plus anciens sont écartés.
+function normalizeSuspensionDays(list) {
+  const days = Array.isArray(list) ? [...new Set(list.filter((d) => typeof d === 'string' && isIsoDate(d)))].sort() : [];
+  return days.slice(-MAX_SAFETY_SUSPENSION_DAYS);
+}
+
+function getSafetySuspensionDays() {
+  return normalizeSuspensionDays(readJSON(STORAGE_KEYS.SAFETY_SUSPENSION, []));
+}
+
+// Règle de fusion (import, restauration) : UNION des jours. Une suspension n'est jamais raccourcie ni effacée par une sauvegarde,
+// quelle qu'elle soit (ancienne, sans cette donnée, ou issue d'un autre appareil) : c'est la règle la plus prudente.
+function mergeSafetySuspension(...lists) {
+  return normalizeSuspensionDays([].concat(...lists.map((l) => (Array.isArray(l) ? l : []))));
+}
+
+function recordSafetySuspension(iso = todayISO()) {
+  if (!isIsoDate(iso)) return false;
+  const days = getSafetySuspensionDays();
+  if (days.includes(iso)) return true;
+  return writeJSON(STORAGE_KEYS.SAFETY_SUSPENSION, normalizeSuspensionDays([...days, iso]));
+}
+
+// L'entraînement est-il interdit en ce moment ? Moteur absent ou illisible : on ne peut pas le dire, rien n'est neutralisé.
+function isTrainingSuspendedNow() {
+  if (typeof evaluateSafetyPolicy !== 'function') return false;
+  try {
+    return evaluateSafetyPolicy(getProfile(), { action: 'view' }).canStartTraining === false;
+  } catch (e) {
+    return false;
+  }
+}
+
+// Fail-closed (textes et parcours qui INCITENT à s'entraîner) : vrai seulement si la politique a pu être évaluée ET autorise l'entraînement.
+function isTrainingAuthorizedNow() {
+  if (typeof evaluateSafetyPolicy !== 'function') return false;
+  try {
+    return evaluateSafetyPolicy(getProfile(), { action: 'view' }).canStartTraining === true;
+  } catch (e) {
+    return false;
+  }
+}
+
+// Mémorise aujourd'hui comme jour suspendu si l'entraînement est interdit (appelé au chargement de chaque page).
+function syncSafetySuspension() {
+  if (isTrainingSuspendedNow()) recordSafetySuspension();
+}
+
+// Ensemble des jours suspendus, aujourd'hui compris si l'interdiction est en cours.
+function getSuspendedDaySet() {
+  const set = new Set(getSafetySuspensionDays());
+  if (isTrainingSuspendedNow()) set.add(todayISO());
+  return set;
+}
+
 // Plan de la semaine (lun-dim) : jours d'entraînement choisis, + rattrapage.
 // Un jour d'entraînement passé sans séance « crée une dette » : le premier jour de repos suivant
 // de la même semaine devient un jour d'entraînement (rescue) pour garder la série.
@@ -420,6 +484,7 @@ function getWeekPlan(now = new Date()) {
   const todayIso = isoOf(now);
   const profile = getProfile();
   const startIso = profile ? profile.streakStart || profile.startDate : '0000-00-00';
+  const suspendedDays = getSuspendedDaySet();
   let debt = 0;
   const days = [];
 
@@ -439,6 +504,11 @@ function getWeekPlan(now = new Date()) {
     const fastPhase = fastPhaseOn(iso);
     if (fastPhase && fastPhase.phase === 'fast') {
       days.push({ iso, weekday: d.getDay(), type: 'fast', fastDay: fastPhase.day, fastDays: fastPhase.days, rescue: false, done, missed: false, isPast, isToday: iso === todayIso });
+      continue;
+    }
+    // Jour suspendu par précaution (sans séance) : ni séance attendue, ni jour manqué, ni dette, ni rattrapage.
+    if (suspendedDays.has(iso) && !done) {
+      days.push({ iso, weekday: d.getDay(), type: planned.has(d.getDay()) ? 'training' : 'rest', rescue: false, done, missed: false, suspended: true, isPast, isToday: iso === todayIso });
       continue;
     }
     let type = planned.has(d.getDay()) ? 'training' : 'rest';
@@ -468,6 +538,7 @@ function getStreak() {
   const startMonday = mondayOf(new Date(streakStart + 'T00:00:00'));
   const currentMonday = mondayOf(new Date());
   let streak = 0;
+  const suspendedDays = getSuspendedDaySet();
 
   for (let monday = new Date(currentMonday); monday >= startMonday; monday.setDate(monday.getDate() - 7)) {
     const sunday = new Date(monday);
@@ -485,7 +556,11 @@ function getStreak() {
 
     if (count >= target) {
       streak++;
-    } else if (monday.getTime() !== currentMonday.getTime()) {
+    } else if (monday.getTime() === currentMonday.getTime()) {
+      // la semaine en cours ne casse jamais la série
+    } else if ([...suspendedDays].some((d) => d >= from && d <= to)) {
+      // Semaine neutralisée par une suspension de sécurité : ni +1 (aucune séance fictive, aucune récompense), ni rupture.
+    } else {
       break;
     }
   }
@@ -506,6 +581,8 @@ function collectExportData() {
     shopping: readJSON(STORAGE_KEYS.SHOPPING, []),
     recovery: getRecoveryLog(),
     challenges: getChallengeData(),
+    // Mémoire de suspension de sécurité : dates seules (aucun motif, aucun symptôme).
+    safetySuspension: getSafetySuspensionDays(),
   };
 }
 
@@ -582,6 +659,7 @@ function migrateImportData(data) {
   if (migrated.water === undefined) migrated.water = {};
   if (migrated.shopping === undefined) migrated.shopping = [];
   if (migrated.recovery === undefined) migrated.recovery = [];
+  if (migrated.safetySuspension === undefined) migrated.safetySuspension = []; // anciennes sauvegardes : compatibles
   return migrated;
 }
 
@@ -683,6 +761,15 @@ function validateImportData(data) {
   }
   if (migrated.recovery.length > MAX_IMPORT_SESSIONS) throw new Error('Historique de récupération invalide');
   if (migrated.challenges !== undefined && !isPlainObject(migrated.challenges)) throw new Error('Défis invalides');
+  // Mémoire de suspension : uniquement des dates ISO (chaînes), en nombre borné, pas plus tard que demain (marge de fuseau).
+  // Toute autre forme (objet, motif, symptôme, nombre…) est refusée AVANT toute utilisation.
+  const suspension = migrated.safetySuspension;
+  const latestAllowed = addDaysISO(todayISO(), 1);
+  if (!Array.isArray(suspension) || suspension.length > MAX_SAFETY_SUSPENSION_DAYS
+      || suspension.some((d) => typeof d !== 'string' || !isIsoDate(d) || d > latestAllowed)) {
+    throw new Error('Mémoire de suspension invalide');
+  }
+  migrated.safetySuspension = normalizeSuspensionDays(suspension);
   return migrated;
 }
 
@@ -832,6 +919,7 @@ function buildImportPreview(data) {
     startDate: validated.profile.startDate,
     sessions: validated.sessions.length,
     otherCategories,
+    suspensionDays: validated.safetySuspension.length, // jours de suspension de sécurité dans la sauvegarde (fusionnés, jamais retirés)
     legacy: data.schemaVersion === undefined,
     safety: {
       incomingHasSafety: plan.incomingHasSafety,
@@ -908,6 +996,7 @@ function applyImportData(data) {
     STORAGE_KEYS.RECOVERY,
     STORAGE_KEYS.CHALLENGES,
     STORAGE_KEYS.IN_PROGRESS,
+    STORAGE_KEYS.SAFETY_SUSPENSION,
   ];
   const previous = {};
   keys.forEach((key) => {
@@ -935,12 +1024,16 @@ function applyImportData(data) {
     } else {
       localStorage.removeItem(STORAGE_KEYS.CHALLENGES);
     }
-    localStorage.removeItem(STORAGE_KEYS.IN_PROGRESS);
-    return true;
+    // Mémoire de suspension : union avec celle de l'appareil, jamais remplacée ni raccourcie (même pour une restauration exacte).
+    const suspension = mergeSafetySuspension(getSafetySuspensionDays(), data.safetySuspension);
+    if (suspension.length && !writeJSON(STORAGE_KEYS.SAFETY_SUSPENSION, suspension)) throw new Error('Impossible d’enregistrer la mémoire de suspension');
+    localStorage.removeItem(STORAGE_KEYS.IN_PROGRESS); // une séance en pause n'est jamais restaurée : elle serait réévaluée de toute façon
   } catch (e) {
     rollback();
     throw e;
   }
+  syncSafetySuspension(); // si le profil importé interdit l'entraînement, aujourd'hui est mémorisé tout de suite
+  return true;
 }
 
 function importData(jsonString) {
@@ -1111,7 +1204,8 @@ function buildFastICS(fast, now = new Date()) {
     `DTSTART;VALUE=DATE:${compact(fast.start)}`,
     `DTEND;VALUE=DATE:${compact(addDaysISO(fast.start, fast.days))}`,
     `SUMMARY:Jeûne communautaire (${fast.days} jour${fast.days > 1 ? 's' : ''})`,
-    'DESCRIPTION:Récupération douce uniquement. Bois régulièrement et arrête-toi en cas de malaise.',
+    // Aucune activité physique n'est suggérée si l'entraînement n'est pas autorisé (ou si la politique est illisible).
+    `DESCRIPTION:${isTrainingAuthorizedNow() ? 'Récupération douce uniquement. ' : ''}Bois régulièrement et arrête-toi en cas de malaise.`,
     'END:VEVENT',
     'END:VCALENDAR',
     '',

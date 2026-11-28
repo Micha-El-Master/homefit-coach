@@ -148,7 +148,7 @@
       <label class="row-label" for="reminder-time">Heure du rappel</label>
       <input type="time" class="form-input" id="reminder-time" style="width:120px;" />
     </div>
-    <button class="btn btn-secondary" id="ics-btn" style="margin-top:12px; font-size:14px; padding:12px;">📅 Ajouter mes séances à mon agenda</button>
+    <button class="btn btn-secondary" id="ics-btn" data-physical-entry style="margin-top:12px; font-size:14px; padding:12px;">📅 Ajouter mes séances à mon agenda</button>
     <p style="font-size:12px; color:var(--text-muted); margin:8px 0 0;">Crée un événement hebdomadaire sur tes jours d'entraînement, à l'heure du rappel, pour de vrais rappels même app fermée. Les jours de rattrapage ne sont pas inclus.</p>
     <p style="font-size:12px; color:var(--text-muted); margin:8px 0 0;" id="reminder-note">Fonctionne uniquement lorsque l'application est ouverte dans le navigateur (pas de notifications en arrière-plan sans serveur).</p>
   </div>
@@ -463,6 +463,7 @@
         `<strong>Départ :</strong> ${preview.startDate}<br>` +
         `<strong>Séances :</strong> ${preview.sessions}<br>` +
         `<strong>Données secondaires :</strong> ${categories}` +
+        (preview.suspensionDays ? `<br><strong>Suspension de sécurité :</strong> ${preview.suspensionDays} jour${preview.suspensionDays > 1 ? 's' : ''} mémorisé${preview.suspensionDays > 1 ? 's' : ''}, ajouté${preview.suspensionDays > 1 ? 's' : ''} à ceux de cet appareil (jamais retirés).` : '') +
         (preview.legacy ? '<br><strong>Compatibilité :</strong> sauvegarde ancienne, migrée automatiquement.' : '') +
         describeImportSafety(preview.safety);
       document.getElementById('import-preview').style.display = 'block';

@@ -44,10 +44,25 @@ Une donnée absente, inconnue ou mal formée n'est jamais lue comme « aucune si
 | Test de niveau | activité physique | mêmes garde-fous qu'une séance, réévalués à chaque étape |
 | Conseil du coach, bilan de la semaine | incitation à s'entraîner | aucun conseil de reprise, de rattrapage ou d'objectif quand l'entraînement n'est pas autorisé |
 | Nutrition (menus, courses), bibliothèque d'exercices, communauté, partage | non physiques (information) | hors politique |
-| Jeûne communautaire | non physique, mais question médicale distincte | hors politique ; la politique de sécurité prévaut sur ses séances de récupération ; sa compatibilité avec une situation déclarée reste à valider |
+| Jeûne communautaire | non physique, mais question médicale distincte | la participation reste possible ; **aucune règle propre au jeûne n'existe dans le moteur** : la récupération proposée un jour de jeûne passe par la même politique qu'une séance (fermée si l'entraînement est bloqué), et les textes de veille, de reprise, le calendrier et l'agenda du jeûne n'annoncent aucune séance ni récupération quand l'entraînement n'est pas autorisé ; sa compatibilité avec une situation déclarée reste à valider |
+| Défis (enregistrement) | selon l'activité du défi | `logChallenge()` réévalue la politique elle-même (appel direct inclus) : un défi physique refusé n'enregistre rien, l'hydratation continue ; politique illisible ou absente = rien n'est enregistré |
+| Signal « Douleur ou malaise » | sécurité | un seul dispositif (`openSafetySignalDialog`, signaux de `safety.js`) pour la séance et la routine Kegel : arrêt immédiat, rien d'écrit durablement, aucune reprise après un arrêt, réévaluation avant toute reprise ou nouvelle activité |
 
 Pour un utilisateur dont l'entraînement est bloqué, aucune séance « manquée » n'est affichée (⏸️ à la place de ❌ et 🔁) et un défi
 suspendu n'est ni une réussite ni un échec.
+
+**Série (règle de produit provisoire, aucune valeur médicale).** Les jours où l'entraînement est interdit sont mémorisés (dates seules, jamais le motif) dans `hfc_safety_suspension`. Un jour suspendu sans séance n'est ni une séance ni un jour manqué (pas de dette, pas de rattrapage) ; une semaine non atteinte qui contient un jour suspendu est neutre : elle ne casse pas la série et n'y ajoute rien (aucune séance fictive, aucune récompense). Une semaine réellement réussie compte normalement. Sans donnée de suspension, la série est calculée exactement comme avant. Limite : cette mémoire n'est pas incluse dans l'export des données.
+
+**Moteur absent ou en erreur (fail-closed).** Si `evaluateSafetyPolicy` n'est pas chargé ou lève une erreur, aucune activité physique n'est autorisée : séances, récupération, adaptations, hausses de charge, nouveau programme, défis (démarrage, enregistrement, archivage), agenda, rappels et textes d'incitation sont refusés ou neutres, et les portes d'entrée (`data-physical-entry`) sont affichées comme indisponibles.
+
+### Sujets reportés (hors périmètre du 0b-3, aucune règle médicale inventée)
+
+1. Validation médicale des 12 paramètres provisoires et des 31 classifications d'intensité.
+2. Validation médicale du classement des activités annexes (Kegel, hydratation) et de la compatibilité du jeûne communautaire.
+3. Versionnement atomique et protection contre le mélange de versions du Service Worker : sous-lot 0b-5.
+4. Un agenda (.ics) déjà téléchargé avant une suspension ne peut pas être révoqué.
+5. Les jours de suspension où l'application n'a jamais été ouverte ne sont pas mémorisés.
+6. La mémoire de suspension est limitée à 800 jours (les plus anciens sont écartés).
 
 ## 2. Paramètres à valider
 

@@ -26,7 +26,7 @@
       <strong>⏸️ Séance en pause</strong>
       <p id="resume-text" style="font-size:13px; margin:6px 0 12px;"></p>
       <div style="display:flex; gap:8px;">
-        <button class="btn btn-primary" id="resume-btn" style="padding:10px 14px; font-size:14px;">Reprendre</button>
+        <button class="btn btn-primary" id="resume-btn" data-physical-entry style="padding:10px 14px; font-size:14px;">Reprendre</button>
         <button class="btn btn-secondary" id="restart-btn" style="padding:10px 14px; font-size:14px;">Recommencer</button>
       </div>
     </div>
@@ -63,7 +63,7 @@
       <p id="rest-note" style="font-size:12px; color:var(--text-muted); margin:12px 0 0;"></p>
     </div>
 
-    <button class="btn btn-primary" id="start-btn" style="margin-top:8px;">Commencer l'entraînement</button>
+    <button class="btn btn-primary" id="start-btn" data-physical-entry style="margin-top:8px;">Commencer l'entraînement</button>
   </div>
 
   <div id="view-rest" style="display:none;">
@@ -162,23 +162,6 @@
 </div>
 
 <nav class="bottom-nav" id="bottom-nav" aria-label="Navigation principale"></nav>
-
-<div class="safety-overlay" id="safety-overlay" role="alertdialog" aria-modal="true" aria-labelledby="safety-title" hidden>
-  <div class="safety-panel">
-    <h2 id="safety-title">Qu'est-ce qui se passe ?</h2>
-    <div id="safety-step-choose">
-      <p>Ta séance est en pause. Choisis ce que tu ressens.</p>
-      <div class="safety-group" id="safety-signals"></div>
-      <button type="button" class="btn btn-secondary" id="safety-cancel">Tout va bien, reprendre</button>
-    </div>
-    <div id="safety-step-result" hidden>
-      <p class="safety-alert" id="safety-message" role="alert"></p>
-      <p id="safety-emergency" hidden>Contacte les services d'urgence locaux.</p>
-      <button type="button" class="btn btn-primary" id="safety-stop">Arrêter la séance</button>
-      <button type="button" class="btn btn-secondary" id="safety-later" style="margin-top:10px;">Mettre la séance de côté</button>
-    </div>
-  </div>
-</div>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
@@ -747,81 +730,38 @@
     }
   }
 
-  // Bouton « Douleur ou malaise » : met la séance en pause, puis arrête ou propose de la mettre de côté.
-  // Aucun signal n'est enregistré : tout reste dans l'appareil et rien n'est mémorisé sur les symptômes.
-  const safetyOverlay = document.getElementById('safety-overlay');
+  // Bouton « Douleur ou malaise » : met la séance en pause, puis arrête ou propose de la mettre de côté. La fenêtre est celle,
+  // partagée, de safety-ui.js (openSafetySignalDialog). Aucun signal n'est enregistré : rien n'est mémorisé sur les symptômes.
   let safetyPausedTimer = null;
-  let safetyReturnFocus = null;
 
   function openSafety() {
-    safetyReturnFocus = document.activeElement;
     if (activeTimer && typeof activeTimer.pause === 'function') safetyPausedTimer = activeTimer.pause();
     persistProgress();
-    const group = document.getElementById('safety-signals');
-    group.innerHTML = '';
-    [false, true].forEach((urgent) => {
-      const label = document.createElement('p');
-      label.className = 'safety-group-label';
-      label.textContent = urgent ? 'Signes d’alerte' : 'Je ressens';
-      group.appendChild(label);
-      SAFETY_SIGNALS.filter((s) => s.urgent === urgent).forEach((signal) => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'btn btn-secondary safety-signal' + (urgent ? ' urgent' : '');
-        btn.textContent = signal.label;
-        btn.addEventListener('click', () => chooseSafetySignal(signal.id));
-        group.appendChild(btn);
-      });
+    openSafetySignalDialog({
+      intro: 'Ta séance est en pause. Choisis ce que tu ressens.',
+      stopLabel: 'Arrêter la séance',
+      laterLabel: 'Mettre la séance de côté',
+      onUrgent: haltSessionForUrgentSignal, // effacement immédiat de hfc_inprogress, avant tout clic
+      onResume: () => {
+        if (activeTimer && typeof activeTimer.resume === 'function') activeTimer.resume(safetyPausedTimer);
+        safetyPausedTimer = null;
+      },
+      onStop: () => {
+        if (activeTimer) activeTimer.cancel();
+        releaseWakeLock();
+        clearInProgress();
+        location.href = 'dashboard.html';
+      },
+      onLater: () => {
+        persistProgress();
+        releaseWakeLock();
+        location.href = 'dashboard.html';
+      },
     });
-    document.getElementById('safety-title').textContent = 'Qu’est-ce qui se passe ?';
-    document.getElementById('safety-step-choose').hidden = false;
-    document.getElementById('safety-step-result').hidden = true;
-    safetyOverlay.hidden = false;
-    group.querySelector('button').focus();
-  }
-
-  function closeSafety(resume) {
-    safetyOverlay.hidden = true;
-    if (resume && activeTimer && typeof activeTimer.resume === 'function') activeTimer.resume(safetyPausedTimer);
-    safetyPausedTimer = null;
-    if (safetyReturnFocus && typeof safetyReturnFocus.focus === 'function') safetyReturnFocus.focus();
-  }
-
-  function chooseSafetySignal(signalId) {
-    const decision = computeSafetyStop(signalId);
-    if (!decision.stop) {
-      closeSafety(true);
-      return;
-    }
-    if (decision.urgent) haltSessionForUrgentSignal(); // effacement immédiat de hfc_inprogress, avant tout clic
-    document.getElementById('safety-title').textContent = decision.urgent ? 'Arrête tout de suite' : 'Arrête la séance';
-    const message = document.getElementById('safety-message');
-    message.textContent = decision.message;
-    message.classList.toggle('urgent', decision.urgent);
-    document.getElementById('safety-emergency').hidden = !decision.urgent;
-    document.getElementById('safety-later').hidden = decision.urgent;
-    document.getElementById('safety-step-choose').hidden = true;
-    document.getElementById('safety-step-result').hidden = false;
-    document.getElementById('safety-stop').focus();
   }
 
   document.getElementById('safety-btn-work').addEventListener('click', openSafety);
   document.getElementById('safety-btn-rest').addEventListener('click', openSafety);
-  document.getElementById('safety-cancel').addEventListener('click', () => closeSafety(true));
-  document.getElementById('safety-stop').addEventListener('click', () => {
-    if (activeTimer) activeTimer.cancel();
-    releaseWakeLock();
-    clearInProgress();
-    location.href = 'dashboard.html';
-  });
-  document.getElementById('safety-later').addEventListener('click', () => {
-    persistProgress();
-    releaseWakeLock();
-    location.href = 'dashboard.html';
-  });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !safetyOverlay.hidden && !document.getElementById('safety-step-choose').hidden) closeSafety(true);
-  });
 
   function finishSession() {
     if (activeTimer) activeTimer.cancel();

@@ -155,8 +155,13 @@
     if (act === 'plus') pending[id] = (pending[id] || 0) + 1;
     if (act === 'minus') pending[id] = Math.max(0, (pending[id] || 0) - 1);
     if (act === 'log') {
-      logChallenge(id, pending[id]);
-      delete pending[id];
+      // La politique est réévaluée par logChallenge lui-même ; si seule la confirmation de compréhension manque, elle est demandée.
+      let logged = logChallenge(id, pending[id]);
+      if (!logged) {
+        const gate = getChallengePolicy(id);
+        if (!challengeDenialMessage(gate) && gate.requiresAcknowledgement && (await requestSafetyAcknowledgement())) logged = logChallenge(id, pending[id]);
+      }
+      if (logged) delete pending[id];
     }
     render();
   });

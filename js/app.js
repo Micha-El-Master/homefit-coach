@@ -153,13 +153,33 @@ function goalLabel(goal) {
 
 applyTheme();
 
+// Fail-closed visible : si le moteur de sécurité n'est pas chargé (script absent ou bloqué), aucune porte d'entrée vers une activité
+// physique n'est proposée comme active. C'est seulement une vérification de présence : aucune règle de sécurité n'est dupliquée ici.
+function guardPhysicalEntries() {
+  if (typeof evaluateSafetyPolicy === 'function') return;
+  document.querySelectorAll('[data-physical-entry]').forEach((el) => {
+    if (el.tagName === 'BUTTON' || el.tagName === 'A') {
+      el.disabled = true;
+      el.setAttribute('aria-disabled', 'true');
+      el.removeAttribute('href');
+      el.style.pointerEvents = 'none';
+      el.style.opacity = '0.6';
+      el.textContent = 'Indisponible : protection de sécurité non chargée';
+    } else {
+      el.hidden = true;
+    }
+  });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+  guardPhysicalEntries();
   applyTheme();
   renderBottomNav();
   guardProfile();
   highlightNav();
   initThemeToggle();
   registerServiceWorker();
+  syncSafetySuspension();
   checkDailyReminder();
   if (hasProfile()) ensurePersistentStorage();
 });
