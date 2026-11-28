@@ -1,10 +1,13 @@
 const { test, expect } = require('@playwright/test');
 
+// Profil de référence : questionnaire de sécurité rempli, « aucune situation » (niveau « clear » de la politique de sécurité).
+// Un profil sans questionnaire déclenche, à juste titre, la confirmation de compréhension avant la première séance (voir safety-policy.spec.js).
 const PROFILE = {
   name: 'Test Baseline',
   goal: 'forme',
   level: 'debutant',
   startDate: '2026-11-26',
+  safety: { status: 'none', responded: true, preferNot: false, limitations: [], declined: false, answeredAt: '2026-11-26' },
 };
 
 async function clearApplicationState(page) {

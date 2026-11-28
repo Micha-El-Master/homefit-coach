@@ -4,7 +4,7 @@ const { createApp } = require('./helpers');
 
 test('profil sans précautions reste non renseigné', () => {
   const app = createApp();
-  app.profile();
+  app.profile({ safety: undefined });
   const safety = app.run('normalizeSafetyProfile(getProfile())');
   assert.strictEqual(safety.responded, false);
   assert.strictEqual(safety.preferNot, false);
@@ -97,7 +97,10 @@ test('données locales absentes ou anciennes restent sûres', () => {
   assert.strictEqual(app.run('normalizeSafetyProfile(null).responded'), false);
   app.profile({ safety: { responded: true, limitations: ['ancienne_limitation'] } });
   const safety = app.run('normalizeSafetyProfile(getProfile())');
-  assert.strictEqual(safety.responded, true);
+  // Sous-lot 0b-1 : une situation inconnue est une donnée ambiguë. Elle n'est jamais assimilée à « aucune situation »
+  // (avant : responded:true, soit en pratique « aucune restriction »). L'état prudent est « unanswered ».
+  assert.strictEqual(safety.status, 'unanswered');
+  assert.strictEqual(safety.responded, false);
   assert.deepStrictEqual(safety.limitations, []);
 });
 

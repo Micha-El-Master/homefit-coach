@@ -236,12 +236,26 @@ function getProgressionFactor(week) {
 }
 
 // mode : 'standard', 'phase2' (+20 % sur tout le cycle) ou 'maintenance' (niveau constant, sans semaines allégées).
-function scaleExercise(exercise, level, week = 1, feeling = null, mode = 'standard', volume = 1) {
-  const progression = mode === 'maintenance' ? 1 : getProgressionFactor(week);
-  const factor = getLevelFactor(level) * progression * (mode === 'phase2' ? 1.2 : 1) * (FEELING_FACTOR[feeling] || 1) * volume;
-  const delta = getAdjustments()[exercise.id] || 0;
+// `policy` (facultative, résultat de evaluateSafetyPolicy) : sans elle, comportement historique. Avec elle, aucune augmentation
+// au-delà de ce qu'elle autorise (niveau plafonné, progression, phase 2, ressenti « facile », « trop facile », série en plus) ;
+// les réductions (semaine allégée, ressenti « dur », baisses mémorisées, reprise après jeûne) restent toujours appliquées.
+function scaleExercise(exercise, level, week = 1, feeling = null, mode = 'standard', volume = 1, policy = null) {
+  const limited = policy !== null && policy !== undefined;
+  const allowIncrease = !limited || policy.allowIncrease === true;
+  const allowPhase2 = !limited || policy.allowPhase2 === true;
+  const allowAdjustUp = !limited || policy.allowAdjustUp === true;
+  const cap = limited && typeof policy.volumeCap === 'number' ? policy.volumeCap : null;
+  let progression = mode === 'maintenance' ? 1 : getProgressionFactor(week);
+  if (!allowIncrease) progression = Math.min(progression, 1);
+  let levelFactor = getLevelFactor(level);
+  if (cap !== null) levelFactor = Math.min(levelFactor, cap);
+  const feelingFactor = feeling === 'facile' && !allowIncrease ? 1 : (FEELING_FACTOR[feeling] || 1);
+  let factor = levelFactor * progression * (mode === 'phase2' && allowPhase2 ? 1.2 : 1) * feelingFactor * volume;
+  if (cap !== null) factor = Math.min(factor, cap);
+  let delta = getAdjustments()[exercise.id] || 0;
+  if (!allowAdjustUp) delta = Math.min(delta, 0);
   const phase = getWeekPhase(week, mode);
-  const extraSet = mode !== 'maintenance' && week >= 9 && !phase.deload && exercise.sets === 3 ? 1 : 0;
+  const extraSet = allowIncrease && mode !== 'maintenance' && week >= 9 && !phase.deload && exercise.sets === 3 ? 1 : 0;
   const scaled = { ...exercise, sets: exercise.sets + extraSet };
   if (exercise.reps) {
     scaled.reps = Math.max(1, Math.round(exercise.reps * factor) + delta);
@@ -266,10 +280,11 @@ const GOAL_NOTES = {
   discipline: 'Programme habitude : séances raccourcies (un exercice de moins) pour installer la routine.',
 };
 
-function applyGoalVariant(session, goal) {
+function applyGoalVariant(session, goal, policy = null) {
   const base = session.exercises.map((ex) => ({ ...ex }));
-  if (goal === 'muscle') return base.map((ex, i) => (i < 2 ? { ...ex, sets: ex.sets + 1 } : ex));
-  if (goal === 'perte') return [...base, { ...FINISHERS[session.title] }];
+  const growth = !policy || policy.allowIncrease === true; // « muscle » et « perte » ajoutent du volume : interdits sans augmentation
+  if (goal === 'muscle') return growth ? base.map((ex, i) => (i < 2 ? { ...ex, sets: ex.sets + 1 } : ex)) : base;
+  if (goal === 'perte') return growth ? [...base, { ...FINISHERS[session.title] }] : base;
   if (goal === 'discipline') return base.slice(0, -1);
   return base;
 }
@@ -289,9 +304,11 @@ function isFeasible(id, equipment) {
 
 // Remplace chaque exercice infaisable par une alternative faisable (sinon par un repli de la catégorie),
 // et le retire s'il n'existe rien de nouveau à proposer dans la séance.
-// `profile` (facultatif) : un remplaçant incompatible avec les précautions déclarées n'est jamais choisi.
-function applyEquipment(exercises, equipment, profile = null) {
-  const isSafe = (id) => !profile || typeof evaluateExerciseCompatibility !== 'function' || evaluateExerciseCompatibility(id, profile).compatible;
+// `profile` (facultatif) : un remplaçant incompatible avec les précautions déclarées n'est jamais choisi ;
+// `policy` (facultative) : ni un remplaçant au-dessus du plafond d'intensité.
+function applyEquipment(exercises, equipment, profile = null, policy = null) {
+  const isSafe = (id) => (!profile || typeof evaluateExerciseCompatibility !== 'function' || evaluateExerciseCompatibility(id, profile).compatible)
+    && (!policy || typeof isExerciseIntensityAllowed !== 'function' || isExerciseIntensityAllowed(id, policy.maxIntensity));
   const out = [];
   let replaced = 0;
   let dropped = 0;
@@ -332,10 +349,20 @@ function getFastNote(phase) {
   return 'Veille du jeûne : dernière séance complète. Prévois un repas léger, de l\'eau, des tisanes et du bouillon.';
 }
 
-// La récupération passe, comme toute séance, par le garde-fou central : aucun mouvement incompatible avec les précautions déclarées.
+// Texte à afficher quand la politique interdit la séance (messages de gravité « warning », sans diagnostic).
+function safetyPolicyNote(policy) {
+  return policy.messages.filter((m) => m.severity === 'warning').map((m) => m.text).join(' ') || null;
+}
+
+// La récupération n'est pas automatiquement sûre : la politique décide d'abord (interdite en cas de symptômes thoraciques déclarés),
+// puis la routine passe, comme toute séance, par le garde-fou central (précautions et plafond d'intensité).
 function getRecoveryWorkout(profile = getProfile()) {
-  const safe = enforceSafeExercises(RECOVERY_ROUTINE.map((ex) => ({ ...ex })), profile);
-  const safetyNote = describeSafetyEnforcement(safe);
+  const policy = evaluateSafetyPolicy(profile, { action: 'start-recovery' });
+  const blocked = !policy.canOfferRecovery;
+  const safe = blocked
+    ? { exercises: [], removed: [], added: [], status: 'impossible' }
+    : enforceSafeExercises(RECOVERY_ROUTINE.map((ex) => ({ ...ex })), profile, policy);
+  const safetyNote = blocked ? safetyPolicyNote(policy) : describeSafetyEnforcement(safe);
   return {
     type: 'training',
     recovery: true,
@@ -348,9 +375,10 @@ function getRecoveryWorkout(profile = getProfile()) {
     goalNote: null,
     equipmentNote: null,
     ...(safetyNote ? { safetyNote } : {}),
-    safetyStatus: safe.status,
+    safetyStatus: blocked ? 'blocked' : safe.status,
     fastNote: getFastNote(fastPhaseOn(todayISO())),
     exercises: safe.exercises,
+    policy,
   };
 }
 
@@ -362,18 +390,40 @@ function getTodayWorkout(profile, title) {
   const progress = getProgramProgress();
   const week = progress ? progress.week : 1;
   const mode = progress ? progress.mode : 'standard';
-  const feeling = getFeelingTrend();
+  // 1. La politique de sécurité est évaluée en premier, à chaque génération (jamais une ancienne décision).
+  const policy = evaluateSafetyPolicy(profile, { action: 'start-training' });
   const fastPhase = fastPhaseOn(todayISO());
+  if (!policy.canStartTraining) {
+    // Entraînement interdit : aucun exercice n'est généré (ni séance, ni progression, ni adaptation possible ensuite).
+    return {
+      ...day,
+      week,
+      mode,
+      phase: getWeekPhase(week, mode),
+      feeling: null,
+      goalNote: null,
+      equipmentNote: null,
+      safetyNote: safetyPolicyNote(policy),
+      safetyStatus: 'blocked',
+      fastNote: getFastNote(fastPhase),
+      exercises: [],
+      policy,
+    };
+  }
+  const trend = getFeelingTrend();
+  const feeling = trend === 'facile' && !policy.allowIncrease ? null : trend; // « plus intense » n'est jamais appliqué si interdit
   const volume = fastPhase && fastPhase.phase === 'refeed' ? fastPhase.factor : 1;
-  let planned = applyGoalVariant(day, goal);
+  // 2. Contenu autorisé. « muscle » et « perte » ajoutent du volume : écartés si la politique n'autorise aucune augmentation.
+  let planned = applyGoalVariant(day, goal, policy);
   let safetyResult = { exercises: planned, blocked: 0, replaced: 0, unknown: 0 };
   if (typeof applySafetyToExercises === 'function') {
     safetyResult = applySafetyToExercises(planned, profile);
   }
   planned = safetyResult.exercises;
-  const equipped = applyEquipment(planned, getSettings().equipment, profile);
-  // Garde-fou central après le matériel : un remplaçant d'équipement ne doit jamais réintroduire un exercice écarté.
-  const afterEquipment = enforceSafeExercises(equipped.exercises, profile);
+  // 3. Matériel, puis 4. garde-fou central (précautions + plafond d'intensité) : un remplaçant d'équipement ne doit
+  // jamais réintroduire un exercice écarté.
+  const equipped = applyEquipment(planned, getSettings().equipment, profile, policy);
+  const afterEquipment = enforceSafeExercises(equipped.exercises, profile, policy);
   equipped.exercises = afterEquipment.exercises;
   let filled = 0;
   if (typeof fillWithGentleExercises === 'function') {
@@ -382,7 +432,8 @@ function getTodayWorkout(profile, title) {
     filled = topUp.added;
   }
   // Verrou final, après le complément de mouvements doux : la séance retournée respecte toujours les précautions.
-  const finalGuard = enforceSafeExercises(equipped.exercises, profile);
+  // 6. Dernière vérification de sécurité.
+  const finalGuard = enforceSafeExercises(equipped.exercises, profile, policy);
   equipped.exercises = finalGuard.exercises;
 
   let equipmentNote = null;
@@ -418,20 +469,29 @@ function getTodayWorkout(profile, title) {
     mode,
     phase: getWeekPhase(week, mode),
     feeling,
-    goalNote: GOAL_NOTES[goal] || null,
+    // La note de l'objectif décrit un volume en plus : elle n'est pas affichée si cette augmentation n'est pas appliquée.
+    goalNote: (goal === 'muscle' || goal === 'perte') && !policy.allowIncrease ? null : (GOAL_NOTES[goal] || null),
     equipmentNote,
     safetyNote,
     safetyStatus: finalGuard.status,
     fastNote: getFastNote(fastPhase),
-    exercises: equipped.exercises.map((ex) => scaleExercise(ex, level, week, feeling, mode, volume)),
+    exercises: equipped.exercises.map((ex) => scaleExercise(ex, level, week, feeling, mode, volume, policy)),
+    policy,
   };
 }
 
 // Adaptations proposées par le coach (coach.html), appliquées à une séance déjà filtrée par la sécurité.
 // Les transformations sont celles qui étaient écrites dans workout.html ; la seule différence est que le garde-fou
 // central repasse à la fin : aucune adaptation ne peut réintroduire un exercice incompatible avec les précautions.
-// Retourne { exercises, restSeconds, guard } (guard : résultat de enforceSafeExercises).
+// La politique est réévaluée à chaque appel : une adaptation interdite (type inconnu, entraînement bloqué) n'est PAS appliquée.
+// Une adaptation ne peut que réduire ou substituer : elle n'assouplit jamais la politique.
+// Retourne { exercises, restSeconds, guard, policy, denied? } (guard : résultat de enforceSafeExercises).
 function applyCoachAdaptation(exercises, adaptation, profile, restSeconds) {
+  const policy = evaluateSafetyPolicy(profile, { action: 'coach-adapt', adaptation });
+  if (!policy.allowed) {
+    const guard = enforceSafeExercises(exercises, profile, policy);
+    return { exercises: guard.exercises, restSeconds, guard, policy, denied: true };
+  }
   let list = exercises;
   let rest = restSeconds;
   const type = adaptation && adaptation.type;
@@ -442,7 +502,7 @@ function applyCoachAdaptation(exercises, adaptation, profile, restSeconds) {
     rest = Math.min(rest, 30);
   }
   if (type === 'no-equipment') {
-    list = applyEquipment(list, [], profile).exercises;
+    list = applyEquipment(list, [], profile, policy).exercises;
   }
   if (type === 'mini') {
     list = list.slice(0, 3).map((ex) => ({ ...ex, sets: Math.min(2, ex.sets) }));
@@ -461,14 +521,14 @@ function applyCoachAdaptation(exercises, adaptation, profile, restSeconds) {
       const data = EXERCISES[ex.id];
       if (data && categories.includes(data.category) && data.alternatives && data.alternatives.length) {
         // Première alternative compatible avec les précautions (la première tout court sans restriction).
-        const alt = data.alternatives.find((id) => evaluateExerciseCompatibility(id, profile).compatible);
+        const alt = data.alternatives.find((id) => evaluateExerciseCompatibility(id, profile).compatible && isExerciseIntensityAllowed(id, policy.maxIntensity));
         if (alt) return { ...ex, id: alt };
       }
       return ex;
     });
   }
-  const guard = enforceSafeExercises(list, profile);
-  return { exercises: guard.exercises, restSeconds: rest, guard };
+  const guard = enforceSafeExercises(list, profile, policy);
+  return { exercises: guard.exercises, restSeconds: rest, guard, policy };
 }
 
 function getMotivationalMessage(dayNumber) {

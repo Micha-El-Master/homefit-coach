@@ -1,4 +1,4 @@
-const CACHE_NAME = 'homefit-coach-v19';
+const CACHE_NAME = 'homefit-coach-v20';
 const ASSETS = [
   'index.html',
   'dashboard.html',
@@ -11,6 +11,9 @@ const ASSETS = [
   'js/app.js',
   'js/storage.js',
   'js/safety.js',
+  'js/safety-intensity.js',
+  'js/safety-policy.js',
+  'js/safety-ui.js',
   'js/workouts.js',
   'js/exercises.js',
   'js/timer.js',

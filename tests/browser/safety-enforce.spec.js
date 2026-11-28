@@ -7,7 +7,7 @@ const START = new Date(Date.now() - 86400000);
 const START_DATE = `${START.getFullYear()}-${String(START.getMonth() + 1).padStart(2, '0')}-${String(START.getDate()).padStart(2, '0')}`;
 
 const PROFILES = {
-  libre: { name: 'Libre', goal: 'forme', level: 'debutant', startDate: START_DATE },
+  libre: { name: 'Libre', goal: 'forme', level: 'debutant', startDate: START_DATE, safety: { status: 'none', responded: true, limitations: [], declined: false } }, // questionnaire rempli : « aucune situation »
   genoux: { name: 'Genoux', goal: 'forme', level: 'debutant', startDate: START_DATE, safety: { responded: true, limitations: ['knees'] } },
   dos: { name: 'Dos', goal: 'forme', level: 'debutant', startDate: START_DATE, safety: { responded: true, limitations: ['back'] } },
   genouxDos: { name: 'GenouxDos', goal: 'forme', level: 'debutant', startDate: START_DATE, safety: { responded: true, limitations: ['knees', 'back'] } },

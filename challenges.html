@@ -38,6 +38,10 @@
 <nav class="bottom-nav" id="bottom-nav" aria-label="Navigation principale"></nav>
 
 <script src="js/storage.js"></script>
+<script src="js/safety.js"></script>
+<script src="js/safety-intensity.js"></script>
+<script src="js/safety-policy.js"></script>
+<script src="js/safety-ui.js"></script>
 <script src="js/challenges.js"></script>
 <script src="js/app.js"></script>
 <script>
@@ -63,8 +67,12 @@
           })
           .join('');
 
+        // Politique réévaluée à chaque affichage : un défi à effort déjà démarré est suspendu si les précautions l'interdisent.
+        const suspended = def.exerciseIds.length > 0 ? challengeDenialMessage(getChallengePolicy(id)) : null;
         let action;
-        if (st.dayNumber < 1) {
+        if (suspended) {
+          action = `<p style="font-size:14px; margin:0 0 12px; font-weight:600;" role="status">⏸️ ${suspended}</p>`;
+        } else if (st.dayNumber < 1) {
           action = `<p style="font-size:14px; margin:0 0 12px;">⏳ Ce défi commence le <strong>${formatDateFr(data.active[id].startDate)}</strong> (dans ${-st.dayNumber + 1} jour${-st.dayNumber + 1 > 1 ? 's' : ''}).</p>`;
         } else if (!today) {
           action = '';
@@ -99,13 +107,15 @@
 
     document.getElementById('catalog-list').innerHTML = Object.entries(CHALLENGES)
       .filter(([id]) => !data.active[id])
-      .map(
-        ([id, def]) => `<div class="card">
+      .map(([id, def]) => {
+        const refusal = challengeDenialMessage(getChallengePolicy(id));
+        return `<div class="card">
           <h2>${def.icon} ${def.name}</h2>
           <p style="font-size:14px; margin:-6px 0 12px; line-height:1.5;">${def.desc}</p>
-          <button class="btn btn-outline" data-act="start" data-id="${id}" style="padding:12px; font-size:14px;">Commencer</button>
-        </div>`
-      )
+          ${refusal ? `<p style="font-size:13px; margin:0 0 12px; font-weight:600;" role="status">🛡️ ${refusal}</p>` : ''}
+          <button class="btn btn-outline" data-act="start" data-id="${id}" style="padding:12px; font-size:14px;"${refusal ? ' disabled' : ''}>Commencer</button>
+        </div>`;
+      })
       .join('') || '<p style="font-size:13px; color:var(--text-muted);">Tous les défis sont en cours. Bravo !</p>';
 
     document.getElementById('history-section').style.display = data.history.length ? 'block' : 'none';
@@ -121,12 +131,22 @@
       .join('');
   }
 
-  document.querySelector('.app-shell').addEventListener('click', (e) => {
+  // Démarrage d'un défi : la politique est réévaluée au clic ; la confirmation de compréhension est demandée si elle manque.
+  async function startWithSafety(id, debut) {
+    const gate = getChallengePolicy(id);
+    if (!gate.allowed) {
+      if (challengeDenialMessage(gate) || !gate.requiresAcknowledgement) return false;
+      if (!(await requestSafetyAcknowledgement())) return false;
+    }
+    return startChallenge(id, debut);
+  }
+
+  document.querySelector('.app-shell').addEventListener('click', async (e) => {
     const btn = e.target.closest('[data-act]');
     if (!btn) return;
     const id = btn.dataset.id;
     const act = btn.dataset.act;
-    if (act === 'start') startChallenge(id);
+    if (act === 'start') await startWithSafety(id);
     if (act === 'abandon' && confirm('Abandonner ce défi ? Sa progression sera perdue.')) abandonChallenge(id);
     if (act === 'plus') pending[id] = (pending[id] || 0) + 1;
     if (act === 'minus') pending[id] = Math.max(0, (pending[id] || 0) - 1);
@@ -151,8 +171,13 @@
       <p style="font-size:14px; margin:-6px 0 12px; line-height:1.6;">${def.name} · ${start > todayISO() ? `départ le <strong>${formatDateFr(start)}</strong>` : start === todayISO() ? 'départ <strong>aujourd’hui</strong>' : `départ le <strong>${formatDateFr(start)}</strong> (déjà commencé)`}.</p>
       <button class="btn btn-primary" id="join-challenge">Relever ce défi</button>`;
     document.querySelector('.app-shell').insertBefore(box, document.getElementById('active-section'));
-    document.getElementById('join-challenge').addEventListener('click', () => {
-      startChallenge(id, q.get('debut'));
+    const joinRefusal = challengeDenialMessage(getChallengePolicy(id));
+    if (joinRefusal) {
+      box.insertAdjacentHTML('beforeend', `<p style="font-size:13px; margin:12px 0 0; font-weight:600;" role="status">🛡️ ${joinRefusal}</p>`);
+      document.getElementById('join-challenge').disabled = true;
+    }
+    document.getElementById('join-challenge').addEventListener('click', async () => {
+      if (!(await startWithSafety(id, q.get('debut')))) return;
       history.replaceState(null, '', 'challenges.html');
       box.remove();
       render();

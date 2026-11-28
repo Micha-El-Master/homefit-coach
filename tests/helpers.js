@@ -5,7 +5,7 @@ const path = require('path');
 const vm = require('vm');
 
 const ROOT = path.join(__dirname, '..');
-const FILES = ['js/storage.js', 'js/safety.js', 'js/exercises.js', 'js/illustrations.js', 'js/workouts.js', 'js/badges.js', 'js/recap.js', 'js/meals.js', 'js/challenges.js', 'js/community.js', 'js/statut.js', 'js/timer.js'];
+const FILES = ['js/storage.js', 'js/safety.js', 'js/safety-intensity.js', 'js/safety-policy.js', 'js/exercises.js', 'js/illustrations.js', 'js/workouts.js', 'js/badges.js', 'js/recap.js', 'js/meals.js', 'js/challenges.js', 'js/community.js', 'js/statut.js', 'js/timer.js'];
 
 function createApp({ now = new Date(2026, 9, 15, 12, 0, 0), store = {} } = {}) {
   const fixed = now.getTime();
@@ -72,8 +72,14 @@ function createApp({ now = new Date(2026, 9, 15, 12, 0, 0), store = {} } = {}) {
     settings(patch) {
       store.hfc_settings = JSON.stringify(patch);
     },
+    // Profil par défaut : questionnaire de sécurité rempli, « aucune situation » (état « none », niveau « clear »), c'est-à-dire
+    // le comportement historique du moteur. Pour tester « jamais renseigné », passer explicitement `safety: undefined`.
     profile(patch = {}) {
-      store.hfc_profile = JSON.stringify({ name: 'Test', goal: 'forme', level: 'intermediaire', startDate: '2026-10-10', ...patch });
+      store.hfc_profile = JSON.stringify({
+        name: 'Test', goal: 'forme', level: 'intermediaire', startDate: '2026-10-10',
+        safety: { status: 'none', responded: true, preferNot: false, limitations: [], declined: false, returnAfterPause: false, professionalAdvice: false, answeredAt: '2026-10-01', acknowledgedAt: null },
+        ...patch,
+      });
     },
     sessions(list) {
       store.hfc_sessions = JSON.stringify(list.map((s) => (typeof s === 'string' ? { date: s, title: 'Haut du corps', exercises: [] } : s)));

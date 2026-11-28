@@ -24,6 +24,8 @@
     <p id="advice-text" style="font-size:14px; line-height:1.6; margin:0;"></p>
   </div>
 
+  <div id="coach-policy" style="display:none; margin-bottom:16px;" role="status"></div>
+
   <div class="situation-grid" id="situation-list"></div>
 
   <div class="coach-response" id="response-box" style="display:none;">
@@ -36,6 +38,10 @@
 <nav class="bottom-nav" id="bottom-nav" aria-label="Navigation principale"></nav>
 
 <script src="js/storage.js"></script>
+<script src="js/safety.js"></script>
+<script src="js/safety-intensity.js"></script>
+<script src="js/safety-policy.js"></script>
+<script src="js/safety-ui.js"></script>
 <script src="js/exercises.js"></script>
 <script src="js/recap.js"></script>
 <script src="js/app.js"></script>
@@ -134,13 +140,17 @@
       text = `Ta dernière séance date de ${gap} jours. Choisis « Je reprends après une pause » pour une reprise en douceur.`;
     } else if (trend === 'dur') {
       text = 'Tes deux dernières séances étaient dures : la prochaine est déjà allégée. Si tu es fatigué, choisis « Je suis fatigué(e) ».';
-    } else if (trend === 'facile') {
+    } else if (trend === 'facile' && evaluateSafetyPolicy(getProfile(), { action: 'adjust-up' }).allowed) {
       text = 'Tes deux dernières séances étaient faciles : la prochaine est un peu plus intense. Utilise « Trop facile » pendant la séance pour monter encore.';
+    } else if (trend === 'facile') {
+      text = 'Tes séances ne montent pas en intensité tant que ton questionnaire de sécurité n’est pas complété ou si tes précautions limitent la progression.';
     } else {
       text = getWeekTip(getWeekRecap(mondayOf(new Date())), true);
     }
     document.getElementById('advice-text').textContent = text;
   })();
+
+  renderSafetyMessages(document.getElementById('coach-policy'), evaluateSafetyPolicy(getProfile(), { action: 'view' }).messages, { skip: ['acknowledgement-required'] });
 
   const list = document.getElementById('situation-list');
   list.innerHTML = SITUATIONS.map(
@@ -168,10 +178,20 @@
     responseText.textContent = situation.response;
     responseBox.style.display = 'block';
 
-    if (situation.adaptation) {
+    const adaptationAllowed = !situation.adaptation || evaluateSafetyPolicy(getProfile(), { action: 'coach-adapt', adaptation: situation.adaptation }).allowed;
+    if (situation.adaptation && !adaptationAllowed) {
+      // Entraînement interdit par la politique : le coach ne peut pas adapter une séance qui n'existe pas.
+      responseText.textContent = 'Le coach ne peut pas adapter de séance pour le moment : ton entraînement est suspendu par précaution (voir le message ci-dessus).';
+      applyBtn.style.display = 'none';
+      backBtn.style.display = 'flex';
+    } else if (situation.adaptation) {
       applyBtn.style.display = 'flex';
       backBtn.style.display = 'none';
       applyBtn.onclick = () => {
+        if (!evaluateSafetyPolicy(getProfile(), { action: 'coach-adapt', adaptation: situation.adaptation }).allowed) {
+          location.reload(); // précautions modifiées depuis l'affichage : on recalcule
+          return;
+        }
         sessionStorage.setItem(
           'coachAdaptation',
           JSON.stringify({ ...situation.adaptation, label: situation.label })

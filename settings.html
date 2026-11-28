@@ -48,7 +48,7 @@
   </div>
 
   <div class="card">
-    <h2>Précautions physiques</h2>
+    <h2 id="securite">Précautions physiques</h2>
     <p style="font-size:13px; color:var(--text-muted); margin:-4px 0 12px;">Tu peux modifier ou supprimer ces précautions à tout moment. Elles restent sur cet appareil et ne constituent pas un avis médical.</p>
     <div id="safety-settings">
       <label class="meal-card"><input type="checkbox" data-safety="knees" /> Genoux ou jambes</label>
@@ -58,8 +58,10 @@
       <label class="meal-card"><input type="checkbox" data-safety="mobility" /> Mobilité limitée</label>
       <label class="meal-card"><input type="checkbox" data-safety="professional_advice" /> Avis professionnel recommandé</label>
       <label class="meal-card"><input type="checkbox" data-safety="chest_symptoms" /> Symptômes thoraciques ou difficulté respiratoire</label>
+      <label class="meal-card"><input type="checkbox" data-safety-none /> Aucune de ces situations ne me concerne.</label>
       <label class="meal-card"><input type="checkbox" data-safety-prefer /> Je préfère ne pas répondre</label>
     </div>
+    <p id="safety-status-line" style="font-size:13px; color:var(--text-muted); margin:12px 0 0;" role="status"></p>
     <button type="button" class="btn btn-secondary" id="safety-save" style="margin-top:12px;">Enregistrer les précautions</button>
   </div>
 
@@ -161,6 +163,19 @@
       <p id="import-preview-text" style="font-size:13px; margin:0 0 12px;"></p>
       <button class="btn btn-primary" id="import-preview-confirm" style="margin-bottom:8px;">Confirmer le remplacement</button>
       <button class="btn btn-secondary" id="import-preview-cancel">Annuler</button>
+    </div>
+
+    <div id="restore-preview" class="card" style="display:none; margin:12px 0; border:1.5px solid var(--primary); box-shadow:none;" role="region" aria-labelledby="restore-preview-title">
+      <h3 id="restore-preview-title" style="margin:0 0 8px;">Restaurer la copie locale</h3>
+      <p id="restore-preview-text" style="font-size:13px; margin:0 0 12px; line-height:1.6;"></p>
+      <div id="restore-loss" style="display:none; margin:0 0 12px;">
+        <p id="restore-loss-text" role="alert" style="font-size:13px; margin:0 0 10px; line-height:1.6; font-weight:600; color:var(--danger);"></p>
+        <button class="btn btn-primary" id="restore-keep" style="margin-bottom:10px;">Restaurer en conservant mes précautions actuelles</button>
+        <label class="meal-card" style="margin-bottom:8px;"><input type="checkbox" id="restore-confirm-loss" /> Je confirme la suppression de ces précautions.</label>
+        <button class="btn btn-outline" id="restore-exact" style="margin-bottom:8px; border-color:var(--danger); color:var(--danger);" disabled>Restaurer exactement la copie (supprime ces précautions)</button>
+      </div>
+      <button class="btn btn-primary" id="restore-confirm" style="margin-bottom:8px; display:none;">Confirmer la restauration</button>
+      <button class="btn btn-secondary" id="restore-cancel">Annuler</button>
     </div>
 
     <a href="about.html" style="display:inline-block; margin-bottom:12px; font-size:13px; color:var(--primary); font-weight:600;">ℹ️ À propos, confidentialité et crédits</a><br>
@@ -289,32 +304,56 @@
   const profile0 = getProfile();
   document.getElementById('profile-name').textContent = profile0.name;
   const safetyContainer = document.getElementById('safety-settings');
-  const initialSafety = normalizeSafetyProfile(profile0);
-  safetyContainer.querySelectorAll('[data-safety]').forEach((box) => {
-    box.checked = initialSafety.limitations.includes(box.dataset.safety);
-  });
+  const noneSafetyBox = safetyContainer.querySelector('[data-safety-none]');
   const preferSafetyBox = safetyContainer.querySelector('[data-safety-prefer]');
-  preferSafetyBox.checked = initialSafety.preferNot;
+  const safetyStatusLine = document.getElementById('safety-status-line');
+
+  // Texte neutre décrivant l'état enregistré (situations et refus de répondre sont deux informations indépendantes).
+  function describeSafetyStatus(profileLike) {
+    const s = normalizeSafetyProfile(profileLike);
+    if (s.status === 'declared') {
+      const labels = s.limitations.map((id) => SAFETY_LIMITATION_LABELS[id] || id).join(', ');
+      return `État enregistré : ${s.limitations.length} situation${s.limitations.length > 1 ? 's' : ''} déclarée${s.limitations.length > 1 ? 's' : ''} (${labels})${s.declined ? ' ; tu as aussi choisi de ne pas répondre' : ''}.`;
+    }
+    if (s.status === 'none') {
+      return `État enregistré : aucune situation déclarée${s.answeredAt ? `, le ${formatDateFr(s.answeredAt, false)}` : ''}.`;
+    }
+    if (s.status === 'declined') return 'État enregistré : tu as choisi de ne pas répondre.';
+    return 'État enregistré : questionnaire non renseigné.';
+  }
+  function renderSafetyForm(profileLike) {
+    const s = normalizeSafetyProfile(profileLike);
+    safetyContainer.querySelectorAll('[data-safety]').forEach((box) => {
+      box.checked = s.limitations.includes(box.dataset.safety);
+    });
+    noneSafetyBox.checked = s.status === 'none';
+    preferSafetyBox.checked = s.declined;
+    safetyStatusLine.textContent = describeSafetyStatus(profileLike);
+  }
+  renderSafetyForm(profile0);
+
+  // « Aucune de ces situations » est exclusive : elle contredit toute situation et le refus de répondre.
+  // Le refus de répondre est une information indépendante : il peut coexister avec des situations déclarées.
   safetyContainer.addEventListener('change', (event) => {
-    if (event.target === preferSafetyBox && preferSafetyBox.checked) {
-      safetyContainer.querySelectorAll('[data-safety]').forEach((box) => { box.checked = false; });
-    } else if (event.target.matches('[data-safety]') && event.target.checked) {
+    const target = event.target;
+    if (target === noneSafetyBox && noneSafetyBox.checked) {
       preferSafetyBox.checked = false;
+      safetyContainer.querySelectorAll('[data-safety]').forEach((box) => { box.checked = false; });
+    } else if (target !== noneSafetyBox && target.checked) {
+      noneSafetyBox.checked = false;
     }
   });
   document.getElementById('safety-save').addEventListener('click', () => {
-    const limitations = [...safetyContainer.querySelectorAll('[data-safety]:checked')].map((box) => box.dataset.safety);
-    const preferNot = preferSafetyBox.checked;
-    const responded = preferNot || limitations.length > 0;
     const profile = getProfile();
-    profile.safety = {
-      responded,
-      preferNot,
-      limitations: preferNot ? [] : limitations,
-      returnAfterPause: profile.safety && profile.safety.returnAfterPause === true,
-      professionalAdvice: limitations.includes('professional_advice'),
-    };
+    const record = buildSafetyRecordFromAnswers({
+      limitations: [...safetyContainer.querySelectorAll('[data-safety]:checked')].map((box) => box.dataset.safety),
+      none: noneSafetyBox.checked,
+      preferNot: preferSafetyBox.checked,
+    }, profile, todayISO());
+    if (record) profile.safety = record;
+    else delete profile.safety; // rien de coché : questionnaire non renseigné
     if (saveProfile(profile)) {
+      renderSafetyForm(profile);
       showStatus('✔ Précautions enregistrées sur cet appareil.', true);
     } else {
       showStatus('❌ Impossible d’enregistrer les précautions.', false);
@@ -379,6 +418,31 @@
     status.style.color = ok ? 'var(--accent)' : 'var(--danger)';
     status.textContent = message;
   }
+  // Précautions : l'import ne les efface jamais en silence (fusion prudente), et l'aperçu montre ce qui change.
+  function describeSafetySummary(summary) {
+    if (summary.status === 'declared') {
+      return summary.limitations.map((id) => SAFETY_LIMITATION_LABELS[id] || id).join(', ') + (summary.declined ? ' ; refus de répondre conservé' : '');
+    }
+    if (summary.status === 'none') return 'aucune situation déclarée';
+    if (summary.status === 'declined') return 'tu as choisi de ne pas répondre';
+    return 'questionnaire non renseigné';
+  }
+  function describeImportSafety(safety) {
+    if (!safety) return '';
+    const labelsOf = (ids) => ids.map((id) => SAFETY_LIMITATION_LABELS[id] || id).join(', ');
+    const lines = [];
+    if (!safety.incomingHasSafety) {
+      lines.push(safety.current.status === 'unanswered'
+        ? 'Cette sauvegarde ne contient aucune information sur les précautions : le questionnaire reste non renseigné.'
+        : `Cette sauvegarde ne contient aucune information sur les précautions : tes précautions actuelles sont conservées (${describeSafetySummary(safety.current)}).`);
+    } else {
+      lines.push(`Après l’import : ${describeSafetySummary(safety.result)}.`);
+      if (safety.added.length) lines.push(`Précautions ajoutées depuis la sauvegarde : ${labelsOf(safety.added)}.`);
+      if (safety.kept.length) lines.push(`Précautions actuelles conservées (absentes de la sauvegarde) : ${labelsOf(safety.kept)}.`);
+      if (safety.declinedKept) lines.push('Ton choix de ne pas répondre, présent sur cet appareil, est conservé.');
+    }
+    return `<br><strong>Précautions :</strong> ${lines.join(' ')}`;
+  }
   function showImportPreview(json) {
     try {
       const preview = buildImportPreview(json);
@@ -389,7 +453,8 @@
         `<strong>Départ :</strong> ${preview.startDate}<br>` +
         `<strong>Séances :</strong> ${preview.sessions}<br>` +
         `<strong>Données secondaires :</strong> ${categories}` +
-        (preview.legacy ? '<br><strong>Compatibilité :</strong> sauvegarde ancienne, migrée automatiquement.' : '');
+        (preview.legacy ? '<br><strong>Compatibilité :</strong> sauvegarde ancienne, migrée automatiquement.' : '') +
+        describeImportSafety(preview.safety);
       document.getElementById('import-preview').style.display = 'block';
       return true;
     } catch (err) {
@@ -449,15 +514,86 @@
     }
   });
 
+  // Restauration de la copie locale : aperçu des différences de précautions et confirmation explicite avant toute suppression.
+  // L'état actuel est conservé dans la copie locale avant l'écriture : relancer « Restaurer la copie locale » annule la restauration.
+  const RESTORE_SOURCES = { import: 'avant un import', reset: 'avant une réinitialisation', erase: 'avant un effacement', restore: 'avant une restauration', replacement: 'avant un remplacement' };
+  const escapeText = (value) => String(value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const restoreEls = {
+    card: document.getElementById('restore-preview'),
+    text: document.getElementById('restore-preview-text'),
+    loss: document.getElementById('restore-loss'),
+    lossText: document.getElementById('restore-loss-text'),
+    keep: document.getElementById('restore-keep'),
+    check: document.getElementById('restore-confirm-loss'),
+    exact: document.getElementById('restore-exact'),
+    confirm: document.getElementById('restore-confirm'),
+    cancel: document.getElementById('restore-cancel'),
+  };
+  function closeRestorePreview() {
+    restoreEls.card.style.display = 'none';
+    restoreEls.check.checked = false;
+    restoreEls.exact.disabled = true;
+  }
+  function describeRestoreSafety(plan) {
+    const labelsOf = (ids) => ids.map((id) => SAFETY_LIMITATION_LABELS[id] || id).join(', ');
+    const lines = [`Précautions actuelles : ${describeSafetySummary(plan.current)}.`, `Précautions de la copie : ${describeSafetySummary(plan.backup)}.`];
+    if (plan.gained.limitations.length) lines.push(`Précautions de la copie qui seraient ajoutées : ${labelsOf(plan.gained.limitations)}.`);
+    return lines.join(' ');
+  }
+  function describeRestoreLoss(plan) {
+    const parts = [];
+    if (plan.lost.limitations.length) parts.push(`les précautions suivantes seraient supprimées : ${plan.lost.limitations.map((id) => SAFETY_LIMITATION_LABELS[id] || id).join(', ')}`);
+    if (plan.lost.declined) parts.push('ton choix de ne pas répondre serait supprimé');
+    if (plan.lost.chestContext) parts.push('le contexte enregistré pour les symptômes thoraciques serait modifié');
+    if (plan.lost.returnAfterPause) parts.push('l’indication de reprise après une pause serait supprimée');
+    return `Attention : cette copie est plus ancienne que tes précautions actuelles. Si tu la restaures telle quelle, ${parts.join(' ; ')}. L’état actuel resterait récupérable en relançant « Restaurer la copie locale », tant que tu ne fais pas d’autre import ou réinitialisation.`;
+  }
+  function afterRestore(message) {
+    showStatus(message, true);
+    setTimeout(() => location.reload(), 900);
+  }
   document.getElementById('restore-backup-btn').addEventListener('click', () => {
-    if (!getLocalBackup()) return showStatus('❌ Aucune copie de sécurité locale disponible.', false);
-    if (!confirm('Remplacer les données actuelles par la copie de sécurité locale ?')) return;
+    let plan;
     try {
-      restoreLocalBackup();
-      afterImport();
+      plan = getLocalRestorePlan();
     } catch (err) {
+      return showStatus('❌ ' + (err.message || 'Restauration impossible'), false);
+    }
+    if (!plan) return showStatus('❌ Aucune copie de sécurité locale disponible.', false);
+    const when = plan.savedAt ? formatDateFr(plan.savedAt.slice(0, 10), false) : 'date inconnue';
+    restoreEls.text.innerHTML =
+      `<strong>Copie du</strong> ${escapeText(when)} (${escapeText(RESTORE_SOURCES[plan.source] || 'copie locale')})<br>` +
+      `<strong>Profil :</strong> ${escapeText(plan.name)} · <strong>Séances :</strong> ${plan.sessions}<br>` +
+      `<strong>Précautions :</strong> ${escapeText(describeRestoreSafety(plan.safety))}<br>` +
+      'Restaurer remplace les données actuelles par cette copie.';
+    restoreEls.check.checked = false;
+    restoreEls.exact.disabled = true;
+    restoreEls.loss.style.display = plan.safety.hasLoss ? 'block' : 'none';
+    restoreEls.confirm.style.display = plan.safety.hasLoss ? 'none' : 'block';
+    if (plan.safety.hasLoss) restoreEls.lossText.textContent = describeRestoreLoss(plan.safety);
+    restoreEls.card.style.display = 'block';
+    restoreEls.card.scrollIntoView({ block: 'nearest' });
+  });
+  restoreEls.check.addEventListener('change', () => { restoreEls.exact.disabled = !restoreEls.check.checked; });
+  restoreEls.cancel.addEventListener('click', () => {
+    closeRestorePreview();
+    showStatus('Restauration annulée. Aucune donnée modifiée.', true);
+  });
+  function runRestore(options, okMessage) {
+    try {
+      restoreLocalBackup(options);
+      closeRestorePreview();
+      afterRestore(okMessage);
+    } catch (err) {
+      closeRestorePreview();
       showStatus('❌ ' + (err.message || 'Restauration impossible'), false);
     }
+  }
+  restoreEls.confirm.addEventListener('click', () => runRestore({}, '✔ Copie locale restaurée. Rechargement…'));
+  restoreEls.keep.addEventListener('click', () => runRestore({ keepCurrentPrecautions: true }, '✔ Copie locale restaurée, tes précautions actuelles sont conservées. Rechargement…'));
+  restoreEls.exact.addEventListener('click', () => {
+    if (!restoreEls.check.checked) return;
+    runRestore({ confirmedSafetyLoss: true }, '✔ Copie locale restaurée. L’état précédent reste récupérable avec « Restaurer la copie locale ». Rechargement…');
   });
 
   if (navigator.canShare && navigator.canShare({ files: [new File(['{}'], 'x.json', { type: 'application/json' })] })) {

@@ -72,6 +72,7 @@
     <h2>🏁 Programme de 12 semaines terminé !</h2>
     <p style="font-size:14px; margin:0 0 12px;">Bravo ! Ta série est conservée. Choisis la suite :</p>
     <button class="btn btn-primary" data-next="phase2" style="margin-bottom:8px;">🚀 Phase 2 : 12 semaines plus exigeantes (+20 %)</button>
+    <p id="phase2-unavailable" style="display:none; font-size:13px; color:var(--text-muted); margin:0 0 10px;">La phase 2 n’est pas proposée tant que ton questionnaire de sécurité n’est pas complété ou si tes précautions limitent la progression.</p>
     <button class="btn btn-secondary" data-next="maintenance" style="margin-bottom:8px;">🛡️ Entretien : garder mon niveau, sans progression</button>
     <button class="btn btn-outline" data-next="standard">🔄 Recommencer le programme depuis le début</button>
   </div>
@@ -87,7 +88,8 @@
   <div class="card" id="safety-dashboard-card" style="display:none; border:1.5px solid var(--primary);">
     <h2>Précautions prises en compte</h2>
     <p id="safety-dashboard-text" style="font-size:13px; margin:0 0 10px; line-height:1.5;"></p>
-    <a href="settings.html" class="btn btn-secondary" style="padding:10px; font-size:13px;">Modifier mes précautions</a>
+    <div id="safety-policy-messages" style="display:none; margin:0 0 10px;"></div>
+    <a href="settings.html#securite" class="btn btn-secondary" style="padding:10px; font-size:13px;">Modifier mes précautions</a>
   </div>
 
   <div class="card">
@@ -125,6 +127,9 @@
 
 <script src="js/storage.js"></script>
 <script src="js/safety.js"></script>
+<script src="js/safety-intensity.js"></script>
+<script src="js/safety-policy.js"></script>
+<script src="js/safety-ui.js"></script>
 <script src="js/exercises.js"></script>
 <script src="js/workouts.js"></script>
 <script src="js/challenges.js"></script>
@@ -224,6 +229,11 @@
   }
   const progress = getProgramProgress();
   const today = getTodayWorkout(profile);
+  // Politique de sécurité : recalculée à chaque affichage ; elle prévaut sur le plan, la série et la régularité.
+  const policy = today.policy;
+  const policyShown = renderSafetyMessages(document.getElementById('safety-policy-messages'), policy.messages, { skip: ['acknowledgement-required'] });
+  if (policyShown) document.getElementById('safety-dashboard-card').style.display = 'block';
+  if (!policy.canStartTraining) document.getElementById('safety-dashboard-text').style.display = 'none';
 
   document.getElementById('greeting').textContent = `Bonjour ${profile.name} 👋`;
   document.getElementById('week-badge').textContent = `Semaine ${progress.week}/${progress.totalWeeks}` + (progress.cycle > 1 ? ` · Cycle ${progress.cycle}` : '') + (progress.notStarted ? ' · départ bientôt' : '');
@@ -235,11 +245,20 @@
   if (progress.finished) {
     const card = document.getElementById('cycle-card');
     card.style.display = 'block';
+    if (!evaluateSafetyPolicy(profile, { action: 'start-cycle', mode: 'phase2' }).allowed) {
+      card.querySelector('[data-next="phase2"]').style.display = 'none';
+      document.getElementById('phase2-unavailable').style.display = 'block';
+    }
     card.addEventListener('click', (e) => {
       const btn = e.target.closest('[data-next]');
       if (!btn) return;
       if (!confirm('Démarrer un nouveau cycle de 12 semaines à partir d’aujourd’hui ?')) return;
-      startNextCycle(btn.dataset.next);
+      try {
+        startNextCycle(btn.dataset.next); // la politique est réévaluée ici (profil actuel)
+      } catch (err) {
+        document.getElementById('phase2-unavailable').style.display = 'block';
+        return;
+      }
       location.reload();
     });
   }
@@ -267,7 +286,13 @@
   todayDuration.textContent = `⏱️ ${minutes} min · 📅 Cette semaine : ${week.sessionsThisWeek}/${week.targetSessionsPerWeek}`;
   todayCta.href = 'workout.html';
 
-  if (todayPlan.done) {
+  if (!policy.canStartTraining) {
+    // Entraînement interdit par la politique : ni séance, ni bonus, ni rattrapage, ni récupération proposés.
+    todayTitle.textContent = 'Entraînement suspendu par précaution';
+    todaySubtitle.textContent = 'Voir le message ci-dessous.';
+    todayDuration.textContent = '';
+    todayCta.style.display = 'none';
+  } else if (todayPlan.done) {
     todayTitle.textContent = 'Séance du jour terminée ✅';
     todaySubtitle.textContent = 'Bravo ! Tu peux enchaîner avec la prochaine séance si tu te sens en forme.';
     todayCta.textContent = 'Faire une séance bonus';
@@ -301,7 +326,7 @@
 
   if ([0, 1].includes(new Date().getDay())) document.getElementById('recap-card').style.display = 'block';
 
-  if (plan.shortfall > 0) {
+  if (plan.shortfall > 0 && policy.canStartTraining) {
     const alert = document.getElementById('week-alert');
     alert.style.display = 'block';
     alert.textContent = `⚠️ Il te manque ${plan.shortfall} séance${plan.shortfall > 1 ? 's' : ''} pour valider ta semaine : fais une séance bonus dès que possible.`;

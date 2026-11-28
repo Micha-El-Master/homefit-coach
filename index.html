@@ -72,6 +72,7 @@
         <label class="meal-card"><input type="checkbox" data-safety="mobility" /> Mobilité limitée</label>
         <label class="meal-card"><input type="checkbox" data-safety="professional_advice" /> Un professionnel a conseillé de limiter certains efforts</label>
         <label class="meal-card"><input type="checkbox" data-safety="chest_symptoms" /> Symptômes thoraciques ou difficulté respiratoire inhabituelle</label>
+        <label class="meal-card"><input type="checkbox" data-safety-none /> Aucune de ces situations ne me concerne.</label>
         <label class="meal-card"><input type="checkbox" data-safety-prefer /> Je préfère ne pas répondre</label>
       </div>
     </details>
@@ -190,6 +191,24 @@
     el.style.display = 'block';
   }
 
+  // « Aucune de ces situations » est exclusive : elle contredit toute situation et le refus de répondre.
+  // Le refus de répondre est une information indépendante : il peut coexister avec des situations déclarées.
+  (function bindSafetyExclusivity() {
+    const box = document.getElementById('onboarding-safety');
+    const none = box.querySelector('[data-safety-none]');
+    const prefer = box.querySelector('[data-safety-prefer]');
+    const situations = box.querySelectorAll('[data-safety]');
+    box.addEventListener('change', (event) => {
+      const target = event.target;
+      if (target === none && none.checked) {
+        prefer.checked = false;
+        situations.forEach((c) => { c.checked = false; });
+      } else if (target !== none && target.checked) {
+        none.checked = false;
+      }
+    });
+  })();
+
   document.getElementById('onboarding-form').addEventListener('submit', (e) => {
     e.preventDefault();
     const name = document.getElementById('name').value.trim();
@@ -223,18 +242,13 @@
       };
     }
 
-    const safetyLimitations = [...document.querySelectorAll('#onboarding-safety [data-safety]:checked')].map((box) => box.dataset.safety);
-    const preferNot = !!document.querySelector('#onboarding-safety [data-safety-prefer]:checked');
-    const responded = preferNot || safetyLimitations.length > 0;
-    if (responded) {
-      profile.safety = {
-        responded: true,
-        preferNot,
-        limitations: preferNot ? [] : safetyLimitations,
-        returnAfterPause: false,
-        professionalAdvice: safetyLimitations.includes('professional_advice'),
-      };
-    }
+    // Quatre états distincts (voir deriveSafetyState) : rien de coché = questionnaire non renseigné (aucun enregistrement).
+    const safetyRecord = buildSafetyRecordFromAnswers({
+      limitations: [...document.querySelectorAll('#onboarding-safety [data-safety]:checked')].map((box) => box.dataset.safety),
+      none: !!document.querySelector('#onboarding-safety [data-safety-none]:checked'),
+      preferNot: !!document.querySelector('#onboarding-safety [data-safety-prefer]:checked'),
+    }, null, todayISO());
+    if (safetyRecord) profile.safety = safetyRecord;
 
     saveProfile(profile);
     saveSettings({ ...getSettings(), trainingDays: trainingDays.slice().sort((a, b) => a - b), equipment: [...equipment] });

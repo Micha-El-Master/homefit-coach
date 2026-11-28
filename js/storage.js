@@ -52,6 +52,26 @@ function hasProfile() {
   return !!getProfile();
 }
 
+// ───────────── Accusé de compréhension avant la première séance ─────────────
+// Demandé lorsque le questionnaire de sécurité n'est pas renseigné (« unanswered ») ou a été refusé (facette `declined`).
+// Ce n'est ni une autorisation médicale, ni une dispense de responsabilité, ni une garantie de sécurité.
+// Les textes (SAFETY_ACK_TEXT, SAFETY_ACK_BUTTON_LABEL) et la décision (requiresAcknowledgement) viennent de safety-policy.js ;
+// l'interface (fenêtre de confirmation) est dans safety-ui.js.
+
+function needsSafetyAcknowledgement(profile = getProfile()) {
+  return evaluateSafetyPolicy(profile, { action: 'view' }).requiresAcknowledgement;
+}
+
+// Enregistre « j'ai compris » (date du jour). Sans effet pour les états « none » et « declared ».
+function acknowledgeSafetyNotice(todayIso = todayISO()) {
+  const profile = getProfile();
+  if (!profile) return false;
+  const state = deriveSafetyState(profile);
+  if (state.status !== 'unanswered' && !state.declined) return true;
+  profile.safety = buildSafetyRecord({ ...state, acknowledgedAt: todayIso });
+  return saveProfile(profile);
+}
+
 function getSessionLog() {
   const log = readJSON(STORAGE_KEYS.SESSIONS, []);
   return Array.isArray(log) ? log : [];
@@ -209,6 +229,10 @@ function getAdjustments() {
 // Écart de répétitions (ou de secondes) mémorisé par exercice via « trop dur / trop facile ».
 function changeAdjustment(exerciseId, delta) {
   const adj = getAdjustments();
+  // Politique de sécurité : une hausse n'est jamais mémorisée si elle est interdite (les baisses restent toujours possibles).
+  if (delta > 0 && typeof evaluateSafetyPolicy === 'function' && !evaluateSafetyPolicy(getProfile(), { action: 'adjust-up' }).allowed) {
+    return adj[exerciseId] || 0;
+  }
   adj[exerciseId] = (adj[exerciseId] || 0) + delta;
   writeJSON(STORAGE_KEYS.ADJUST, adj);
   return adj[exerciseId];
@@ -362,6 +386,9 @@ function joinCohort(dateIso, todayIso = todayISO()) {
 }
 
 function startNextCycle(mode) {
+  if (typeof evaluateSafetyPolicy === 'function' && !evaluateSafetyPolicy(getProfile(), { action: 'start-cycle', mode }).allowed) {
+    throw new Error('Ce programme n’est pas disponible avec tes précautions actuelles.');
+  }
   const profile = getProfile();
   profile.streakStart = profile.streakStart || profile.startDate;
   profile.startDate = todayISO();
@@ -585,11 +612,20 @@ function validateImportData(data) {
   if (migrated.profile.safety !== undefined) {
     const safety = migrated.profile.safety;
     const allowed = ['knees', 'back', 'shoulders', 'balance', 'mobility', 'professional_advice', 'chest_symptoms'];
+    // Sous-lot 0b-1 : `status` (unanswered | declined | none | declared), `chestContext`, `chestSymptoms`, `answeredAt`
+    // et `acknowledgedAt` sont facultatifs : les anciennes sauvegardes (sans ces champs) restent valides.
+    const optionalDate = (value) => value === undefined || value === null || (typeof value === 'string' && isIsoDate(value));
     if (!isPlainObject(safety)
         || (safety.responded !== undefined && typeof safety.responded !== 'boolean')
         || (safety.preferNot !== undefined && typeof safety.preferNot !== 'boolean')
         || (safety.returnAfterPause !== undefined && typeof safety.returnAfterPause !== 'boolean')
         || (safety.professionalAdvice !== undefined && typeof safety.professionalAdvice !== 'boolean')
+        || (safety.chestSymptoms !== undefined && typeof safety.chestSymptoms !== 'boolean')
+        || (safety.declined !== undefined && typeof safety.declined !== 'boolean')
+        || (safety.status !== undefined && !['unanswered', 'declined', 'none', 'declared'].includes(safety.status))
+        || (safety.chestContext !== undefined && !['unspecified', 'new_or_unexplained', 'evaluated'].includes(safety.chestContext))
+        || !optionalDate(safety.answeredAt)
+        || !optionalDate(safety.acknowledgedAt)
         || (safety.limitations !== undefined && (!Array.isArray(safety.limitations)
           || safety.limitations.some((id) => typeof id !== 'string' || !allowed.includes(id))))) {
       throw new Error('Précautions physiques invalides');
@@ -650,6 +686,128 @@ function validateImportData(data) {
   return migrated;
 }
 
+// ───────────── Import : fusion prudente des précautions (sous-lot 0b-1, décision F1) ─────────────
+// Un import remplace le profil, mais jamais en effaçant silencieusement une précaution ni une information indépendante.
+// La fusion opère sur les FACETTES du questionnaire (voir safety.js), pas sur le seul résumé `status` :
+//  - `limitations` : union des deux côtés, aucune situation n'est retirée ;
+//  - `declined`    : vrai si l'un des deux côtés a refusé de répondre (le refus reste identifiable, même avec des situations) ;
+//  - `status`      : recalculé à partir des facettes (declared > declined > none > unanswered), donc jamais en contradiction ;
+//    « aucune situation » est contredit par toute situation ou tout refus de l'autre côté : il s'efface alors (contradiction
+//    résolue, pas une perte d'information) ; « unanswered » n'apporte aucune information ;
+//  - sauvegarde SANS champ safety : les précautions actuelles sont conservées telles quelles (jamais lues comme « aucune situation ») ;
+//  - contexte thoracique : le plus prudent des deux (new_or_unexplained > unspecified > evaluated).
+const SAFETY_CHEST_CONTEXT_RANK = { evaluated: 1, unspecified: 2, new_or_unexplained: 3 };
+
+function summarizeSafetyState(state) {
+  return { status: state.status, limitations: state.limitations.slice(), declined: state.declined, chestContext: state.chestContext };
+}
+
+// Enregistrement à stocker : rien si le questionnaire est non renseigné et sans accusé de compréhension.
+function safetyRecordOrUndefined(state) {
+  const record = buildSafetyRecord(state);
+  return record.status === 'unanswered' && !record.acknowledgedAt ? undefined : record;
+}
+
+function planSafetyImport(currentProfile, incomingProfile) {
+  const current = deriveSafetyState(currentProfile);
+  const incoming = deriveSafetyState(incomingProfile);
+
+  if (!incoming.hasRecord) {
+    return {
+      incomingHasSafety: false,
+      record: current.hasRecord ? safetyRecordOrUndefined(current) : undefined,
+      current: summarizeSafetyState(current),
+      incoming: summarizeSafetyState(incoming),
+      result: summarizeSafetyState(current),
+      added: [],
+      kept: current.limitations.slice(),
+      declinedKept: false,
+    };
+  }
+
+  const limitations = SAFETY_LIMITATION_IDS.filter((id) => current.limitations.includes(id) || incoming.limitations.includes(id));
+  const declined = current.declined || incoming.declined;
+  const answeredNone = [current, incoming].some((s) => s.status === 'none');
+  const status = limitations.length ? 'declared' : declined ? 'declined' : answeredNone ? 'none' : 'unanswered';
+  const chestSides = [current, incoming].filter((s) => s.chestSymptoms);
+  const chestContext = chestSides.length
+    ? chestSides.map((s) => s.chestContext).sort((a, b) => SAFETY_CHEST_CONTEXT_RANK[b] - SAFETY_CHEST_CONTEXT_RANK[a])[0]
+    : 'unspecified';
+  const latest = (values) => values.filter(Boolean).sort().pop() || null;
+  const merged = {
+    status,
+    limitations,
+    declined,
+    chestContext,
+    returnAfterPause: current.returnAfterPause || incoming.returnAfterPause,
+    answeredAt: status === 'unanswered' ? null : latest([current, incoming].filter((s) => s.status !== 'unanswered').map((s) => s.answeredAt)),
+    // L'accusé de compréhension se rapporte au refus ou à l'absence de réponse : on garde le plus récent des deux côtés concernés.
+    acknowledgedAt: latest([current, incoming].filter((s) => s.status === 'unanswered' || s.declined).map((s) => s.acknowledgedAt)),
+  };
+  return {
+    incomingHasSafety: true,
+    record: safetyRecordOrUndefined(merged),
+    current: summarizeSafetyState(current),
+    incoming: summarizeSafetyState(incoming),
+    result: { status, limitations: limitations.slice(), declined, chestContext },
+    added: limitations.filter((id) => !current.limitations.includes(id)),
+    kept: limitations.filter((id) => current.limitations.includes(id) && !incoming.limitations.includes(id)),
+    // Refus de répondre présent sur l'appareil mais absent de la sauvegarde (et conservé).
+    declinedKept: current.declined && !incoming.declined,
+  };
+}
+
+// Profil à enregistrer : le profil importé, avec les précautions issues de la fusion.
+function applySafetyImportPlan(profile, plan) {
+  const next = { ...profile };
+  if (plan.record === undefined) delete next.safety;
+  else next.safety = plan.record;
+  return next;
+}
+
+// ───────────── Restauration de la copie locale : protection des précautions ─────────────
+// Restaurer « exactement » la copie peut retirer une précaution déclarée depuis (ou un refus de répondre, ou rendre le
+// contexte thoracique moins prudent). Ce plan détecte ces pertes AVANT toute écriture ; la restauration les exige confirmées.
+function planSafetyRestore(currentProfile, backupProfile) {
+  const current = deriveSafetyState(currentProfile);
+  const backup = deriveSafetyState(backupProfile);
+  const lostLimitations = current.limitations.filter((id) => !backup.limitations.includes(id));
+  const gainedLimitations = backup.limitations.filter((id) => !current.limitations.includes(id));
+  const lost = {
+    limitations: lostLimitations,
+    declined: current.declined && !backup.declined,
+    chestContext: current.chestSymptoms && backup.chestSymptoms
+      && SAFETY_CHEST_CONTEXT_RANK[current.chestContext] > SAFETY_CHEST_CONTEXT_RANK[backup.chestContext]
+      ? { from: current.chestContext, to: backup.chestContext } : null,
+    returnAfterPause: current.returnAfterPause && !backup.returnAfterPause,
+  };
+  const gained = { limitations: gainedLimitations, declined: backup.declined && !current.declined };
+  const hasLoss = lost.limitations.length > 0 || lost.declined || lost.chestContext !== null || lost.returnAfterPause;
+  const changed = hasLoss || gained.limitations.length > 0 || gained.declined || current.status !== backup.status;
+  return {
+    current: summarizeSafetyState(current),
+    backup: summarizeSafetyState(backup),
+    lost,
+    gained,
+    hasLoss,
+    changed,
+  };
+}
+
+// Prévisualisation de la restauration (aucune écriture). null s'il n'existe pas de copie locale.
+function getLocalRestorePlan() {
+  const record = getLocalBackup();
+  if (!record) return null;
+  const data = validateImportData(record.snapshot);
+  return {
+    savedAt: record.savedAt,
+    source: record.source,
+    name: data.profile.name,
+    sessions: data.sessions.length,
+    safety: planSafetyRestore(getProfile(), data.profile),
+  };
+}
+
 function buildImportPreview(data) {
   if (typeof data === 'string') {
     if (byteLength(data) > MAX_IMPORT_BYTES) throw new Error('Sauvegarde trop volumineuse');
@@ -668,12 +826,22 @@ function buildImportPreview(data) {
   if (validated.challenges && (Object.keys(validated.challenges.active || {}).length || (validated.challenges.history || []).length)) {
     otherCategories.push('défis');
   }
+  const plan = planSafetyImport(getProfile(), validated.profile);
   return {
     name: validated.profile.name,
     startDate: validated.profile.startDate,
     sessions: validated.sessions.length,
     otherCategories,
     legacy: data.schemaVersion === undefined,
+    safety: {
+      incomingHasSafety: plan.incomingHasSafety,
+      current: plan.current,
+      incoming: plan.incoming,
+      result: plan.result,
+      added: plan.added,
+      kept: plan.kept,
+      declinedKept: plan.declinedKept,
+    },
   };
 }
 
@@ -697,12 +865,23 @@ function createLocalBackup(source = 'replacement') {
   return record;
 }
 
-function restoreLocalBackup() {
+// Restaure la copie locale. Ne supprime JAMAIS une précaution en silence :
+//  - { keepCurrentPrecautions: true } : restaure tout le reste, mais fusionne les précautions actuelles (même règle que l'import) ;
+//  - { confirmedSafetyLoss: true }    : restauration exacte, après confirmation explicite de la suppression ;
+//  - sans option et sans perte de précaution : comportement historique.
+// L'état actuel est conservé dans la copie locale avant toute écriture : relancer la restauration l'annule.
+function restoreLocalBackup(options = {}) {
   const record = getLocalBackup();
   if (!record) throw new Error('Aucune copie de sécurité disponible');
   const data = validateImportData(record.snapshot);
+  let restored = data;
+  if (options.keepCurrentPrecautions === true) {
+    restored = { ...data, profile: applySafetyImportPlan(data.profile, planSafetyImport(getProfile(), data.profile)) };
+  } else if (planSafetyRestore(getProfile(), data.profile).hasLoss && options.confirmedSafetyLoss !== true) {
+    throw new Error('Cette restauration supprimerait des précautions : une confirmation explicite est nécessaire.');
+  }
   createLocalBackup('restore');
-  return applyImportData(data);
+  return applyImportData(restored);
 }
 
 function parseImportJson(jsonString) {
@@ -766,8 +945,11 @@ function applyImportData(data) {
 
 function importData(jsonString) {
   const data = parseImportJson(jsonString);
+  // Les précautions sont fusionnées avec celles de l'appareil (jamais effacées en silence) avant tout remplacement.
+  const plan = planSafetyImport(getProfile(), data.profile);
+  const merged = { ...data, profile: applySafetyImportPlan(data.profile, plan) };
   createLocalBackup('import');
-  return applyImportData(data);
+  return applyImportData(merged);
 }
 
 // Efface les historiques et données de suivi sans toucher au profil ni aux préférences.

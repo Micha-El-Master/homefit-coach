@@ -11,6 +11,8 @@ const CHALLENGES = {
     restEvery: 7,
     target: (d) => Math.min(40, 5 + Math.floor((d - 1) * 1.1)),
     desc: 'Chaque jour, un nombre de pompes qui monte doucement. Un jour de repos tous les 7 jours.',
+    exerciseIds: ['pompes'],
+    progressive: true,
   },
   gainage30: {
     name: '30 jours de gainage',
@@ -20,6 +22,8 @@ const CHALLENGES = {
     restEvery: 7,
     target: (d) => 20 + Math.floor((d - 1) * 2.5),
     desc: 'Tiens la planche un peu plus longtemps chaque jour. Un jour de repos tous les 7 jours.',
+    exerciseIds: ['planche'],
+    progressive: true,
   },
   squats30: {
     name: '30 jours de squats',
@@ -29,6 +33,8 @@ const CHALLENGES = {
     restEvery: 7,
     target: (d) => 15 + Math.floor((d - 1) * 1.5),
     desc: 'Des squats chaque jour, de plus en plus nombreux. Un jour de repos tous les 7 jours.',
+    exerciseIds: ['squat'],
+    progressive: true,
   },
   kegel21: {
     name: '21 jours de Kegel',
@@ -39,6 +45,8 @@ const CHALLENGES = {
     auto: 'kegel',
     target: () => 1,
     desc: 'Une routine Kegel par jour pendant 3 semaines. Suivi automatique : fais ta routine, c’est validé.',
+    exerciseIds: [],
+    progressive: false,
   },
   eau14: {
     name: '14 jours d’hydratation',
@@ -49,6 +57,8 @@ const CHALLENGES = {
     auto: 'water',
     target: () => getWaterGoalMl(),
     desc: 'Atteins ton objectif d’eau chaque jour. Suivi automatique depuis la page Nutrition.',
+    exerciseIds: [],
+    progressive: false,
   },
 };
 
@@ -105,11 +115,35 @@ function resolveChallengeStart(startIso, todayIso = todayISO()) {
   return daysBetween(startIso, todayIso) <= CHALLENGE_MAX_LATE_DAYS ? startIso : todayIso;
 }
 
+// Politique de sécurité d'un défi : recalculée à chaque appel avec le profil actuel. Un défi qui prescrit de l'effort suit les
+// mêmes garde-fous qu'une séance ; un défi à charge croissante n'est pas proposé si la progression est limitée.
+function getChallengePolicy(id) {
+  const def = CHALLENGES[id];
+  return evaluateSafetyPolicy(getProfile(), {
+    action: 'start-challenge',
+    challenge: def ? { exerciseIds: def.exerciseIds, progressive: def.progressive } : null,
+  });
+}
+
+// Explication d'un refus de la politique (null si autorisé ou si seule la confirmation de compréhension manque).
+function challengeDenialMessage(policy) {
+  const codes = policy.reasons.filter((r) => r.startsWith('denied:')).map((r) => r.slice(7));
+  if (codes.includes('tier-blocked')) return 'Ce défi est suspendu par précaution : ton entraînement est suspendu (voir le message de la page Accueil).';
+  if (codes.includes('progressive-challenge-not-allowed')) return 'Ce défi augmente la charge chaque jour : il n’est pas proposé tant que ton questionnaire de sécurité n’est pas complété ou si tes précautions limitent la progression.';
+  if (codes.some((c) => c.startsWith('exercise-incompatible'))) return 'Ce défi contient un exercice qui ne correspond pas à tes précautions.';
+  if (codes.some((c) => c.startsWith('exercise-intensity'))) return 'Ce défi contient un exercice dont l’intensité n’est pas autorisée avec tes précautions.';
+  if (codes.some((c) => c !== 'acknowledgement-required')) return 'Ce défi n’est pas disponible avec tes précautions actuelles.';
+  return null;
+}
+
+// Retourne true si le défi a démarré ; false s'il est déjà en cours ou refusé par la politique.
 function startChallenge(id, startIso) {
+  if (!getChallengePolicy(id).allowed) return false;
   const data = getChallengeData();
-  if (data.active[id]) return;
+  if (data.active[id]) return false;
   data.active[id] = { startDate: resolveChallengeStart(startIso), log: {} };
   saveChallengeData(data);
+  return true;
 }
 
 function abandonChallenge(id) {

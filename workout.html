@@ -173,7 +173,7 @@
     </div>
     <div id="safety-step-result" hidden>
       <p class="safety-alert" id="safety-message" role="alert"></p>
-      <p id="safety-emergency" hidden>En cas d'urgence, appelle les secours (15 ou 112).</p>
+      <p id="safety-emergency" hidden>Contacte les services d'urgence locaux.</p>
       <button type="button" class="btn btn-primary" id="safety-stop">Arrêter la séance</button>
       <button type="button" class="btn btn-secondary" id="safety-later" style="margin-top:10px;">Mettre la séance de côté</button>
     </div>
@@ -184,6 +184,9 @@
 
 <script src="js/storage.js"></script>
 <script src="js/safety.js"></script>
+<script src="js/safety-intensity.js"></script>
+<script src="js/safety-policy.js"></script>
+<script src="js/safety-ui.js"></script>
 <script src="js/exercises.js"></script>
 <script src="js/illustrations.js"></script>
 <script src="js/workouts.js"></script>
@@ -264,8 +267,10 @@
     if (today.fastNote) notes.push(`🌿 <strong>Jeûne communautaire</strong> — ${today.fastNote}`);
     if (today.goalNote) notes.push(`🎯 ${today.goalNote}`);
     if (today.equipmentNote) notes.push(`🧰 ${today.equipmentNote}`);
-    if (today.safetyNote) notes.push(`🛡️ ${today.safetyNote}`);
-    else if (!today.exercises.length) notes.push('🛡️ Aucun exercice n’est compatible avec tes précautions : la séance n’est pas proposée. Demande l’avis d’un professionnel qualifié.');
+    if (today.safetyNote && today.safetyStatus !== 'blocked') notes.push(`🛡️ ${today.safetyNote}`);
+    else if (!today.exercises.length && today.safetyStatus !== 'blocked') notes.push('🛡️ Aucun exercice n’est compatible avec tes précautions : la séance n’est pas proposée. Demande l’avis d’un professionnel qualifié.');
+    // Messages de la politique de sécurité (la confirmation de compréhension s'affiche dans sa propre fenêtre).
+    ((today.policy && today.policy.messages) || []).filter((m) => m.id !== 'acknowledgement-required').forEach((m) => notes.push(`🛡️ ${m.text}`));
     if (typeof getSafetyWarnings === 'function') {
       getSafetyWarnings(profile).forEach((warning) => notes.push(`🛡️ ${warning}`));
     }
@@ -327,11 +332,17 @@
     renderExerciseList();
     const startBtn = document.getElementById('start-btn');
     startBtn.addEventListener('click', startSession);
-    if (!today.exercises.length) {
+    if (today.safetyStatus === 'blocked') {
+      // La politique de sécurité interdit l'entraînement : aucune séance, aucune reprise, aucune récupération proposée.
+      startBtn.disabled = true;
+      startBtn.textContent = 'Entraînement suspendu par précaution';
+      document.getElementById('session-picker').style.display = 'none';
+    } else if (!today.exercises.length) {
       // Aucun exercice compatible : on l'explique et la séance ne peut pas démarrer.
       startBtn.disabled = true;
       startBtn.textContent = 'Séance indisponible avec tes précautions';
     }
+    document.getElementById('adjust-easier').style.display = evaluateSafetyPolicy(getProfile(), { action: 'adjust-up' }).allowed ? '' : 'none';
 
     document.getElementById('exercise-list').addEventListener('click', (e) => {
       const swapBtn = e.target.closest('.swap-btn');
@@ -346,7 +357,7 @@
         e.stopPropagation();
         const idx = Number(altChip.dataset.idx);
         // Même si le bouton a été affiché, on revérifie avec les précautions actuelles avant de remplacer.
-        if (!evaluateExerciseCompatibility(altChip.dataset.altId, getProfile()).compatible) {
+        if (!evaluateSafetyPolicy(getProfile(), { action: 'swap', exerciseId: altChip.dataset.altId }).allowed) {
           renderExerciseList();
           return;
         }
@@ -391,7 +402,7 @@
           ? `${ex.sets} séries × ${ex.reps}${ex.perLeg ? '/jambe' : ''}`
           : `${ex.sets} séries × ${ex.holdSeconds}s`;
         // Remplacement manuel : seules les alternatives compatibles avec les précautions sont proposées.
-        const safeAlternatives = (data.alternatives || []).filter((altId) => evaluateExerciseCompatibility(altId, currentProfile).compatible);
+        const safeAlternatives = (data.alternatives || []).filter((altId) => evaluateSafetyPolicy(currentProfile, { action: 'swap', exerciseId: altId }).allowed);
         const alts = safeAlternatives
           .map(
             (altId) =>
@@ -452,9 +463,31 @@
     return steps;
   }
 
-  function startSession() {
+  // Empreinte de la politique : si elle change entre l'affichage et le clic, la séance affichée n'est plus fiable.
+  const policyFingerprint = (p) => [p.tier, p.maxIntensity, p.allowIncrease, p.allowPhase2, p.volumeCap, p.canStartTraining, p.canOfferRecovery].join('|');
+  const shownPolicyFingerprint = policyFingerprint(today.policy);
+
+  // Contrôle à chaque démarrage ou reprise : la politique est recalculée avec le profil ACTUEL (jamais une ancienne décision).
+  // Retourne true si on peut continuer ; sinon la page est rechargée (précautions modifiées) ou la confirmation a été refusée.
+  async function ensureSafetyAllows(action, savedExercises) {
+    const current = getProfile();
+    const decision = evaluateSafetyPolicy(current, { action: action === 'resume' ? (today.recovery ? 'start-recovery' : 'start-training') : action });
+    const content = savedExercises || today.exercises;
+    const guard = enforceSafeExercises(content, current, decision);
+    const blockedNow = today.recovery ? !decision.canOfferRecovery : !decision.canStartTraining;
+    if (blockedNow || guard.removed.length || guard.added.length || policyFingerprint(decision) !== shownPolicyFingerprint) {
+      showToast('Tes précautions ont changé : la séance est mise à jour.');
+      setTimeout(() => location.reload(), 1200);
+      return false;
+    }
+    if (decision.requiresAcknowledgement) return requestSafetyAcknowledgement();
+    return true;
+  }
+
+  async function startSession() {
     // Aucun exercice compatible avec les précautions : la séance n'est jamais lancée.
     if (!today.exercises.length) return;
+    if (!(await ensureSafetyAllows(today.recovery ? 'start-recovery' : 'start-training'))) return;
     sessionStart = Date.now();
     queue = buildQueue();
     queueIndex = 0;
@@ -475,20 +508,24 @@
     const guard = enforceSafeExercises(saved.exercises, currentProfile);
     if (guard.removed.length || guard.added.length) return { ok: false };
     const current = computeRoutines(currentProfile);
+    // La politique réévalue la séance enregistrée avec le profil ACTUEL (contenu, intensité, entraînement autorisé).
+    const policyDecision = evaluateSafetyPolicy(currentProfile, { action: 'resume', exercises: saved.exercises, recovery: saved.title === RECOVERY_TITLE });
+    if (policyDecision.reasons.some((r) => r.startsWith('denied:') && r !== 'denied:acknowledgement-required')) return { ok: false };
     const savedOptions = saved.options || {};
     // Séances sauvegardées avant ce garde-fou : leurs routines étaient les routines complètes.
     const savedRoutines = saved.routines || { warmup: routineIds(WARMUP_ROUTINE), cooldown: routineIds(COOLDOWN_ROUTINE) };
     if (savedOptions.warmup && !sameIds(savedRoutines.warmup || [], routineIds(current.warmup))) return { ok: false };
     if (savedOptions.cooldown && !sameIds(savedRoutines.cooldown || [], routineIds(current.cooldown))) return { ok: false };
-    return { ok: true, routines: current };
+    return { ok: true, routines: current, needsAcknowledgement: policyDecision.requiresAcknowledgement };
   }
 
-  function resumeSession(saved) {
+  async function resumeSession(saved) {
     const check = checkSavedSession(saved);
     if (!check.ok) {
       showToast('Cette séance ne peut pas être reprise : elle ne correspond plus à tes précautions.');
       return;
     }
+    if (check.needsAcknowledgement && !(await requestSafetyAcknowledgement())) return;
     routines = check.routines;
     today.title = saved.title;
     today.subtitle = saved.subtitle;
@@ -505,7 +542,18 @@
     runStep();
   }
 
+  // Signal urgent : la séance est arrêtée pour de bon. Plus rien n'est écrit (aucune reprise possible, même après rechargement)
+  // et aucun détail médical du signal n'est conservé.
+  let sessionHalted = false;
+  function haltSessionForUrgentSignal() {
+    sessionHalted = true;
+    if (activeTimer && typeof activeTimer.cancel === 'function') activeTimer.cancel();
+    releaseWakeLock();
+    clearInProgress();
+  }
+
   function persistProgress() {
+    if (sessionHalted) return;
     saveInProgress({
       date: todayISO(),
       savedAt: Date.now(),
@@ -526,6 +574,7 @@
   }
 
   function runStep() {
+    if (sessionHalted) return;
     if (queueIndex >= queue.length) {
       finishSession();
       return;
@@ -662,6 +711,11 @@
 
   // « Trop dur / trop facile » : modifie les séries restantes de cet exercice et s'en souvient pour les prochaines séances.
   function adjustCurrent(direction) {
+    if (direction > 0 && !evaluateSafetyPolicy(getProfile(), { action: 'adjust-up' }).allowed) {
+      showToast('Pas d’augmentation possible avec tes précautions actuelles');
+      document.getElementById('adjust-easier').style.display = 'none';
+      return;
+    }
     const step = queue[queueIndex];
     const ex = step.exercise;
     const isHold = !!ex.holdSeconds;
@@ -739,6 +793,7 @@
       closeSafety(true);
       return;
     }
+    if (decision.urgent) haltSessionForUrgentSignal(); // effacement immédiat de hfc_inprogress, avant tout clic
     document.getElementById('safety-title').textContent = decision.urgent ? 'Arrête tout de suite' : 'Arrête la séance';
     const message = document.getElementById('safety-message');
     message.textContent = decision.message;

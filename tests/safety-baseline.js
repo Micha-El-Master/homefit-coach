@@ -23,23 +23,26 @@ const EQUIPMENTS = { aucun: [], chaise: ['chaise'], complet: ['chaise', 'charges
 const FASTS = { sans: [], reprise: [{ start: '2026-10-12', days: 3 }] };
 
 // Champs ajoutés par le sous-lot 0 : exclus de la comparaison (le contenu historique reste identique).
-const NEW_FIELDS = ['safetyStatus'];
+const NEW_FIELDS = ['safetyStatus', 'policy'];
 
 function hash(value) {
   return crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex').slice(0, 16);
 }
 
-function computeSnapshot() {
+// `only` : noms de profils à calculer (par défaut tous). Depuis le sous-lot 0b-2, seul « repondu-sans-limitation » (état « none »)
+// doit rester identique à l'historique : « non-renseigne » et « prefere-ne-pas-dire » relèvent désormais du niveau « caution ».
+function computeSnapshot(only = Object.keys(SAFETY_PROFILES)) {
   const out = {};
   for (const [safetyName, safety] of Object.entries(SAFETY_PROFILES)) {
+    if (!only.includes(safetyName)) continue;
     for (const [startName, startDate] of Object.entries(START_DATES)) {
       for (const [equipName, equipment] of Object.entries(EQUIPMENTS)) {
         for (const [fastName, fasts] of Object.entries(FASTS)) {
           const app = createApp({ now: NOW });
-          app.profile({ startDate, goal: 'forme', ...(safety ? { safety } : {}) });
+          app.profile({ startDate, goal: 'forme', safety });
           app.settings({ equipment, fasts });
           for (const goal of GOALS) {
-            app.profile({ startDate, goal, ...(safety ? { safety } : {}) });
+            app.profile({ startDate, goal, safety });
             for (const title of TITLES) {
               if (title === 'Récupération' && goal !== 'forme') continue; // la récupération ne dépend pas de l'objectif
               const w = app.run(`getTodayWorkout(getProfile(), ${JSON.stringify(title)})`);

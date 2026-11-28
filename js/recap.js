@@ -66,7 +66,11 @@ function getWeekTip(recap, isCurrentWeek) {
     return 'Objectif atteint, mais tes séances étaient dures : garde bien tes jours de repos, dors suffisamment et utilise « trop dur » pour alléger.';
   }
   if (rated && feelings.facile > feelings.dur && feelings.facile >= feelings.bien) {
-    return 'Objectif atteint et séances faciles : tu peux monter en intensité avec « trop facile » pendant la séance.';
+    // Le conseil d'augmenter l'intensité n'est donné que si la politique de sécurité l'autorise.
+    const canIncrease = typeof evaluateSafetyPolicy !== 'function' || evaluateSafetyPolicy(getProfile(), { action: 'adjust-up' }).allowed;
+    return canIncrease
+      ? 'Objectif atteint et séances faciles : tu peux monter en intensité avec « trop facile » pendant la séance.'
+      : 'Objectif atteint et séances faciles : ta progression reste limitée tant que ton questionnaire de sécurité n’est pas complété ou si tes précautions la limitent.';
   }
   return count > target
     ? 'Objectif dépassé ! Pense à garder au moins un vrai jour de repos pour bien récupérer.'

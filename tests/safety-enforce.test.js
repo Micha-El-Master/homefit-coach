@@ -99,7 +99,7 @@ test('enforceSafeExercises : idempotente et sans effet sur un profil sans restri
 
 test('enforceSafeExercises : profil absent, non renseigné ou « préfère ne pas répondre » = aucune modification', () => {
   const routine = 'WARMUP_ROUTINE.concat(COOLDOWN_ROUTINE, RECOVERY_ROUTINE)';
-  [undefined, { responded: true, preferNot: true, limitations: [] }, { responded: false, limitations: ['knees'] }].forEach((safety) => {
+  [undefined, { responded: true, preferNot: true, limitations: [] }, { responded: false, limitations: [] }].forEach((safety) => {
     const app = createApp({ now: NOW });
     app.profile(safety ? { safety } : {});
     const r = app.run(`enforceSafeExercises(${routine}, getProfile())`);
@@ -342,12 +342,16 @@ test('D4 adaptations du coach : mini garde 3 exercices au plus, light et reduce-
 
 // ───────────── G. Non-régression : profils sans restriction ─────────────
 
-test('non-régression : profils sans restriction exploitable = comportement historique à l\'identique (1 224 cas)', () => {
+test('non-régression : le profil « aucune situation » (none) garde le comportement historique à l\'identique (408 cas)', () => {
+  // Les profils « non renseigné » et « préfère ne pas répondre » (niveau « caution » depuis le sous-lot 0b-2) sont testés dans
+  // tests/safety-policy.test.js ; l'instantané historique complet reste dans le fichier de référence.
   const expected = loadFixture();
-  const actual = computeSnapshot();
+  const actual = computeSnapshot(['repondu-sans-limitation']);
+  const expectedNone = Object.fromEntries(Object.entries(expected).filter(([k]) => k.startsWith('repondu-sans-limitation|')));
   assert.strictEqual(Object.keys(expected).length, 1224);
-  assert.deepStrictEqual(Object.keys(actual).sort(), Object.keys(expected).sort());
-  const diff = Object.keys(expected).filter((k) => actual[k] !== expected[k]);
+  assert.strictEqual(Object.keys(expectedNone).length, 408);
+  assert.deepStrictEqual(Object.keys(actual).sort(), Object.keys(expectedNone).sort());
+  const diff = Object.keys(expectedNone).filter((k) => actual[k] !== expectedNone[k]);
   assert.deepStrictEqual(diff, [], `cas modifiés : ${diff.slice(0, 5)}`);
 });
 
